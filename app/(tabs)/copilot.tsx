@@ -1,0 +1,127 @@
+import { useState, useRef } from 'react';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import Markdown from 'react-native-markdown-display';
+import { Theme } from '@/constants/Colors';
+
+const API_URL = 'https://vanism-ai.vercel.app/api/copilot';
+const SYSTEM = 'You are Vanism.ai Copilot, an expert van life travel assistant. Be concise and practical.';
+
+type Message = { role: 'user' | 'assistant'; content: string };
+
+const markdownStyles = {
+  body: { color: Theme.cream, fontFamily: 'Archivo', fontSize: 14, lineHeight: 22 },
+  heading1: { color: Theme.cream, fontFamily: 'Archivo-Bold', fontSize: 16, marginBottom: 4, marginTop: 4 },
+  heading2: { color: Theme.cream, fontFamily: 'Archivo-Bold', fontSize: 15, marginBottom: 4, marginTop: 8 },
+  heading3: { color: Theme.cream, fontFamily: 'Archivo-SemiBold', fontSize: 14, marginBottom: 2, marginTop: 6 },
+  strong: { color: '#B5C9B7', fontFamily: 'Archivo-Bold' },
+  em: { color: Theme.cream, fontFamily: 'Archivo' },
+  bullet_list: { marginVertical: 2 },
+  ordered_list: { marginVertical: 2 },
+  list_item: { marginVertical: 1 },
+  hr: { backgroundColor: Theme.border, height: 1, marginVertical: 8 },
+  code_inline: { backgroundColor: Theme.charcoal, color: Theme.cream, fontFamily: 'Courier', fontSize: 12, borderRadius: 3, paddingHorizontal: 4 },
+  fence: { backgroundColor: Theme.charcoal, borderRadius: 6, padding: 10, marginVertical: 6 },
+  blockquote: { backgroundColor: Theme.surface, borderLeftColor: Theme.rust, borderLeftWidth: 3, paddingLeft: 10, marginVertical: 4 },
+  link: { color: Theme.rust },
+};
+
+export default function CopilotScreen() {
+  const [messages, setMessages] = useState<Message[]>([
+    { role: 'assistant', content: 'Copilot online. Where are you headed?' },
+  ]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+
+  async function send() {
+    const text = input.trim();
+    if (!text || loading) return;
+    const next: Message[] = [...messages, { role: 'user', content: text }];
+    setMessages(next);
+    setInput('');
+    setLoading(true);
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: next, system: SYSTEM }),
+      });
+      const data = await res.json();
+      setMessages(prev => [...prev, { role: 'assistant', content: data.reply ?? 'No response.' }]);
+    } catch {
+      setMessages(prev => [...prev, { role: 'assistant', content: 'No signal.' }]);
+    }
+    setLoading(false);
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+  }
+
+  return (
+    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
+      <ScrollView
+        ref={scrollRef}
+        style={styles.feed}
+        contentContainerStyle={styles.feedContent}
+        onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+      >
+        {messages.map((m, i) => (
+          <View key={i} style={[styles.bubble, m.role === 'user' ? styles.userBubble : styles.aiBubble]}>
+            {m.role === 'assistant' ? (
+              <Markdown style={markdownStyles}>{m.content}</Markdown>
+            ) : (
+              <Text style={styles.userText}>{m.content}</Text>
+            )}
+          </View>
+        ))}
+        {loading && (
+          <View style={styles.loadingRow}>
+            <ActivityIndicator size="small" color={Theme.muted} />
+            <Text style={styles.loadingText}>reading the road...</Text>
+          </View>
+        )}
+      </ScrollView>
+
+      <View style={styles.inputRow}>
+        <TextInput
+          style={styles.input}
+          value={input}
+          onChangeText={setInput}
+          placeholder="Ask the copilot..."
+          placeholderTextColor={Theme.muted}
+          onSubmitEditing={send}
+          returnKeyType="send"
+          multiline
+        />
+        <TouchableOpacity style={[styles.sendBtn, loading && styles.sendBtnDisabled]} onPress={send} disabled={loading}>
+          <Text style={styles.sendLabel}>GO</Text>
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: Theme.charcoal },
+  feed: { flex: 1 },
+  feedContent: { padding: 16, gap: 10 },
+  bubble: { borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, maxWidth: '85%' },
+  aiBubble: { backgroundColor: '#1E2225', alignSelf: 'flex-start', borderWidth: 1, borderColor: Theme.border },
+  userBubble: { backgroundColor: Theme.moss, alignSelf: 'flex-end' },
+  userText: { color: Theme.cream, fontFamily: 'Archivo', fontSize: 14, lineHeight: 20 },
+  loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
+  loadingText: { color: Theme.muted, fontFamily: 'Archivo', fontSize: 12 },
+  inputRow: { flexDirection: 'row', gap: 8, padding: 12, borderTopWidth: 1, borderTopColor: Theme.border, backgroundColor: Theme.charcoal },
+  input: { flex: 1, backgroundColor: '#1E2225', borderWidth: 1, borderColor: Theme.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: Theme.cream, fontFamily: 'Archivo', maxHeight: 100 },
+  sendBtn: { backgroundColor: Theme.rust, borderRadius: 10, paddingHorizontal: 18, justifyContent: 'center', alignItems: 'center' },
+  sendBtnDisabled: { opacity: 0.5 },
+  sendLabel: { color: Theme.cream, fontFamily: 'Archivo-Bold', fontSize: 13, letterSpacing: 1 },
+});

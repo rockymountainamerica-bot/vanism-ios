@@ -1,11 +1,11 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { Theme } from '@/constants/Colors';
 
-export default function BaseScreen() {
+export default function PlanScreen() {
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>BASE</Text>
-      <Text style={styles.sub}>Your current location & home base</Text>
+      <Text style={styles.label}>PLAN</Text>
+      <Text style={styles.sub}>Route planning & itinerary</Text>
     </View>
   );
 }
