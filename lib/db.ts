@@ -211,6 +211,10 @@ export function getPlansByStatus(status: PlanRow['status']): PlanRow[] {
 
 export type SpotInput = { name: string; lat: number; lon: number; notes: string };
 
+export type PlanSleepSpotRow = {
+  id: number; plan_id: number; name: string; lat: number; lon: number; notes: string | null;
+};
+
 export type PlanBathSpotRow = {
   id: number; plan_id: number; name: string; lat: number; lon: number; notes: string | null;
 };
@@ -243,6 +247,17 @@ export function promotePlanToCurrent(plan_id: number): void {
     db.runSync(`UPDATE plans SET status = 'upcoming' WHERE status = 'current'`);
     db.runSync(`UPDATE plans SET status = 'current' WHERE id = ?`, [plan_id]);
   });
+}
+
+export function getActivePlanSleepSpot(): PlanSleepSpotRow | null {
+  return getDb().getFirstSync<PlanSleepSpotRow>(
+    `SELECT s.id, s.plan_id, s.name, s.lat, s.lon, s.notes
+     FROM plan_sleep_spots s
+     JOIN plans p ON s.plan_id = p.id
+     WHERE p.status IN ('current', 'upcoming')
+     ORDER BY CASE p.status WHEN 'current' THEN 0 ELSE 1 END, p.created_at DESC
+     LIMIT 1`
+  ) ?? null;
 }
 
 export function getActivePlanBathSpot(): PlanBathSpotRow | null {
