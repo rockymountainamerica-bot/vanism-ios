@@ -94,6 +94,26 @@ const MIGRATIONS: string[][] = [
       notes    TEXT
     )`,
   ],
+  // v6 — re-ensures plan_sleep_spots and plan_bath_spots exist; v5 was skipped on
+  // devices where schema_version was already stamped 5 before these tables were added.
+  [
+    `CREATE TABLE IF NOT EXISTS plan_sleep_spots (
+      id       INTEGER PRIMARY KEY AUTOINCREMENT,
+      plan_id  INTEGER NOT NULL REFERENCES plans(id),
+      name     TEXT    NOT NULL,
+      lat      REAL    NOT NULL,
+      lon      REAL    NOT NULL,
+      notes    TEXT
+    )`,
+    `CREATE TABLE IF NOT EXISTS plan_bath_spots (
+      id       INTEGER PRIMARY KEY AUTOINCREMENT,
+      plan_id  INTEGER NOT NULL REFERENCES plans(id),
+      name     TEXT    NOT NULL,
+      lat      REAL    NOT NULL,
+      lon      REAL    NOT NULL,
+      notes    TEXT
+    )`,
+  ],
 ];
 
 export function runMigrations(): void {
