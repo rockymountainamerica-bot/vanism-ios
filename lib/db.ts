@@ -215,30 +215,33 @@ export type PlanBathSpotRow = {
   id: number; plan_id: number; name: string; lat: number; lon: number; notes: string | null;
 };
 
-export function insertFullPlan(
-  origin: string,
-  destination: string,
-  distance_miles: number,
-  drive_time_minutes: number,
-  notes: string,
-  sleepSpot: SpotInput,
-  bathSpot: SpotInput
-): void {
+export function upsertPlanSleepSpot(plan_id: number, spot: SpotInput): void {
   const db = getDb();
   db.withTransactionSync(() => {
-    const { lastInsertRowId: planId } = db.runSync(
-      `INSERT INTO plans (origin, destination, distance_miles, drive_time_minutes, status, created_at, notes)
-       VALUES (?, ?, ?, ?, 'upcoming', ?, ?)`,
-      [origin, destination, distance_miles, drive_time_minutes, Date.now(), notes]
-    );
+    db.runSync(`DELETE FROM plan_sleep_spots WHERE plan_id = ?`, [plan_id]);
     db.runSync(
       `INSERT INTO plan_sleep_spots (plan_id, name, lat, lon, notes) VALUES (?, ?, ?, ?, ?)`,
-      [planId, sleepSpot.name, sleepSpot.lat, sleepSpot.lon, sleepSpot.notes]
+      [plan_id, spot.name, spot.lat, spot.lon, spot.notes]
     );
+  });
+}
+
+export function upsertPlanBathSpot(plan_id: number, spot: SpotInput): void {
+  const db = getDb();
+  db.withTransactionSync(() => {
+    db.runSync(`DELETE FROM plan_bath_spots WHERE plan_id = ?`, [plan_id]);
     db.runSync(
       `INSERT INTO plan_bath_spots (plan_id, name, lat, lon, notes) VALUES (?, ?, ?, ?, ?)`,
-      [planId, bathSpot.name, bathSpot.lat, bathSpot.lon, bathSpot.notes]
+      [plan_id, spot.name, spot.lat, spot.lon, spot.notes]
     );
+  });
+}
+
+export function promotePlanToCurrent(plan_id: number): void {
+  const db = getDb();
+  db.withTransactionSync(() => {
+    db.runSync(`UPDATE plans SET status = 'upcoming' WHERE status = 'current'`);
+    db.runSync(`UPDATE plans SET status = 'current' WHERE id = ?`, [plan_id]);
   });
 }
 

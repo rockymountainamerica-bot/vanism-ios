@@ -12,15 +12,13 @@ import {
 } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { Theme } from '@/constants/Colors';
-import { insertFullPlan, SpotInput } from '@/lib/db';
+import { insertPlan } from '@/lib/db';
 
 const API_URL = 'https://vanism-ai.vercel.app/api/copilot';
 
-type Spot = { name: string; lat: number; lon: number; notes: string };
 type Plan = {
   origin: string; destination: string;
   distance_miles: number; drive_time_minutes: number;
-  sleep_spot: Spot; bath_spot: Spot;
 };
 type Message = { role: 'user' | 'assistant'; content: string; plan?: Plan };
 
@@ -37,13 +35,7 @@ function PlanCard({ plan, replyText }: { plan: Plan; replyText: string }) {
 
   function approve() {
     if (approved) return;
-    insertFullPlan(
-      plan.origin, plan.destination,
-      plan.distance_miles, plan.drive_time_minutes,
-      replyText,
-      plan.sleep_spot as SpotInput,
-      plan.bath_spot as SpotInput
-    );
+    insertPlan(plan.origin, plan.destination, plan.distance_miles, plan.drive_time_minutes, replyText);
     setApproved(true);
   }
 
@@ -56,17 +48,6 @@ function PlanCard({ plan, replyText }: { plan: Plan; replyText: string }) {
         <Text style={cardStyles.location}>{plan.destination}</Text>
       </View>
       <Text style={cardStyles.meta}>{plan.distance_miles} mi · {formatDriveTime(plan.drive_time_minutes)}</Text>
-
-      <View style={cardStyles.divider} />
-      <Text style={cardStyles.label}>SLEEP</Text>
-      <Text style={cardStyles.spotName}>{plan.sleep_spot.name}</Text>
-      <Text style={cardStyles.spotNotes}>{plan.sleep_spot.notes}</Text>
-
-      <View style={cardStyles.divider} />
-      <Text style={cardStyles.label}>BATH</Text>
-      <Text style={cardStyles.spotName}>{plan.bath_spot.name}</Text>
-      <Text style={cardStyles.spotNotes}>{plan.bath_spot.notes}</Text>
-
       <TouchableOpacity style={[cardStyles.btn, approved && cardStyles.btnDone]} onPress={approve} disabled={approved}>
         <Text style={cardStyles.btnText}>{approved ? '✓ Saved to Plan' : 'Approve Plan'}</Text>
       </TouchableOpacity>
@@ -138,7 +119,7 @@ export default function CopilotScreen() {
                 <Text style={styles.userText}>{m.content}</Text>
               )}
             </View>
-            {m.plan?.sleep_spot && m.plan?.bath_spot && <PlanCard plan={m.plan} replyText={m.content} />}
+            {m.plan && <PlanCard plan={m.plan} replyText={m.content} />}
           </View>
         ))}
         {loading && (
@@ -192,9 +173,6 @@ const cardStyles = StyleSheet.create({
   location: { fontFamily: 'Archivo-SemiBold', fontSize: 14, color: Theme.cream },
   arrow: { fontFamily: 'Archivo-Bold', fontSize: 14, color: Theme.rust },
   meta: { fontFamily: 'Archivo', fontSize: 12, color: Theme.muted },
-  divider: { height: 1, backgroundColor: Theme.border, marginVertical: 8 },
-  spotName: { fontFamily: 'Archivo-SemiBold', fontSize: 13, color: Theme.gold },
-  spotNotes: { fontFamily: 'Archivo', fontSize: 12, color: Theme.muted, lineHeight: 17, marginTop: 2 },
   btn: { backgroundColor: Theme.rust, borderRadius: 8, paddingVertical: 8, alignItems: 'center', marginTop: 8 },
   btnDone: { backgroundColor: Theme.moss },
   btnText: { fontFamily: 'Archivo-Bold', fontSize: 12, color: Theme.cream, letterSpacing: 0.6 },
