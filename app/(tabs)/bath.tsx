@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Location from 'expo-location';
+import { useFocusEffect } from 'expo-router';
 import { Theme } from '@/constants/Colors';
-import { getHotSprings, HotSpringRow } from '@/lib/db';
+import { getActivePlanBathSpot, PlanBathSpotRow } from '@/lib/db';
 
 function haversineMi(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 3958.8;
@@ -14,16 +15,10 @@ function haversineMi(lat1: number, lon1: number, lat2: number, lon2: number): nu
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-type SpringWithDist = HotSpringRow & { distMi: number | null };
-
-function SectionHeader({ title }: { title: string }) {
-  return <Text style={styles.sectionHeader}>{title}</Text>;
-}
-
 function ComingSoon({ title }: { title: string }) {
   return (
     <View style={styles.section}>
-      <SectionHeader title={title} />
+      <Text style={styles.sectionHeader}>{title}</Text>
       <View style={styles.comingSoonBox}>
         <Text style={styles.comingSoonText}>Coming soon</Text>
       </View>
@@ -32,37 +27,42 @@ function ComingSoon({ title }: { title: string }) {
 }
 
 export default function BathScreen() {
-  const [springs, setSprings] = useState<SpringWithDist[]>([]);
+  const [spot, setSpot] = useState<PlanBathSpotRow | null | undefined>(undefined);
+  const [distMi, setDistMi] = useState<number | null>(null);
 
-  useEffect(() => {
-    const rows = getHotSprings();
-    setSprings(rows.map(r => ({ ...r, distMi: null })));
-
+  const load = useCallback(() => {
+    const s = getActivePlanBathSpot();
+    setSpot(s);
+    setDistMi(null);
+    if (!s) return;
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') return;
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const { latitude, longitude } = loc.coords;
-      setSprings(
-        rows
-          .map(r => ({ ...r, distMi: haversineMi(latitude, longitude, r.lat, r.lon) }))
-          .sort((a, b) => (a.distMi ?? Infinity) - (b.distMi ?? Infinity))
-      );
+      setDistMi(haversineMi(loc.coords.latitude, loc.coords.longitude, s.lat, s.lon));
     })();
   }, []);
+
+  useEffect(() => { load(); }, [load]);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  if (spot === undefined) return null;
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={{ paddingBottom: 40 }}>
       <View style={styles.section}>
-        <SectionHeader title="HOT SPRINGS" />
-        {springs.map(s => (
-          <View key={s.id} style={styles.row}>
-            <Text style={styles.springName}>{s.name}</Text>
-            <Text style={styles.dist}>
-              {s.distMi != null ? `${s.distMi.toFixed(1)} mi` : '— mi'}
-            </Text>
+        <Text style={styles.sectionHeader}>BATH SPOT</Text>
+        {spot ? (
+          <View style={styles.spotCard}>
+            <View style={styles.spotHeader}>
+              <Text style={styles.spotName}>{spot.name}</Text>
+              <Text style={styles.dist}>{distMi != null ? `${distMi.toFixed(1)} mi` : '— mi'}</Text>
+            </View>
+            {spot.notes ? <Text style={styles.spotNotes}>{spot.notes}</Text> : null}
           </View>
-        ))}
+        ) : (
+          <Text style={styles.emptyText}>No bath spot yet — plan a trip with Copilot first.</Text>
+        )}
       </View>
 
       <ComingSoon title="SHOWERS" />
@@ -75,30 +75,13 @@ export default function BathScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Theme.charcoal, paddingHorizontal: 20 },
   section: { marginTop: 24 },
-  sectionHeader: {
-    fontFamily: 'Archivo-SemiBold',
-    fontSize: 10,
-    color: Theme.muted,
-    letterSpacing: 1.5,
-    marginBottom: 8,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 11,
-    borderBottomWidth: 1,
-    borderBottomColor: Theme.border,
-  },
-  springName: { fontFamily: 'Archivo-SemiBold', fontSize: 14, color: Theme.gold, flex: 1 },
+  sectionHeader: { fontFamily: 'Archivo-SemiBold', fontSize: 10, color: Theme.muted, letterSpacing: 1.5, marginBottom: 8 },
+  emptyText: { fontFamily: 'Archivo', fontSize: 14, color: Theme.muted },
+  spotCard: { borderWidth: 1, borderColor: Theme.border, borderRadius: 10, padding: 14, backgroundColor: Theme.surface },
+  spotHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  spotName: { fontFamily: 'Archivo-SemiBold', fontSize: 15, color: Theme.gold, flex: 1 },
   dist: { fontFamily: 'Archivo', fontSize: 12, color: Theme.muted, marginLeft: 12 },
-  comingSoonBox: {
-    borderWidth: 1,
-    borderColor: Theme.border,
-    borderStyle: 'dashed',
-    borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
+  spotNotes: { fontFamily: 'Archivo', fontSize: 13, color: Theme.muted, lineHeight: 19 },
+  comingSoonBox: { borderWidth: 1, borderColor: Theme.border, borderStyle: 'dashed', borderRadius: 8, paddingVertical: 14, alignItems: 'center' },
   comingSoonText: { fontFamily: 'Archivo', fontSize: 13, color: Theme.muted, fontStyle: 'italic' },
 });

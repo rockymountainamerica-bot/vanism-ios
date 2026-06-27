@@ -46,7 +46,7 @@ const MIGRATIONS: string[][] = [
   [
     `ALTER TABLE plans ADD COLUMN notes TEXT`,
   ],
-  // v4
+  // v4 — hot_springs (kept for future discover mode, unused in current model)
   [
     `CREATE TABLE IF NOT EXISTS hot_springs (
       id   INTEGER PRIMARY KEY,
@@ -74,6 +74,25 @@ const MIGRATIONS: string[][] = [
       (13, 'Goldbug Hot Springs',            45.129200, -114.006900),
       (14, 'Umpqua Hot Springs',             43.289700, -122.360000),
       (15, 'The Homestead Crater',           40.361100, -111.494400)`,
+  ],
+  // v5
+  [
+    `CREATE TABLE IF NOT EXISTS plan_sleep_spots (
+      id       INTEGER PRIMARY KEY AUTOINCREMENT,
+      plan_id  INTEGER NOT NULL REFERENCES plans(id),
+      name     TEXT    NOT NULL,
+      lat      REAL    NOT NULL,
+      lon      REAL    NOT NULL,
+      notes    TEXT
+    )`,
+    `CREATE TABLE IF NOT EXISTS plan_bath_spots (
+      id       INTEGER PRIMARY KEY AUTOINCREMENT,
+      plan_id  INTEGER NOT NULL REFERENCES plans(id),
+      name     TEXT    NOT NULL,
+      lat      REAL    NOT NULL,
+      lon      REAL    NOT NULL,
+      notes    TEXT
+    )`,
   ],
 ];
 
@@ -168,6 +187,50 @@ export function getPlansByStatus(status: PlanRow['status']): PlanRow[] {
     `SELECT * FROM plans WHERE status = ? ORDER BY created_at DESC`,
     [status]
   );
+}
+
+export type SpotInput = { name: string; lat: number; lon: number; notes: string };
+
+export type PlanBathSpotRow = {
+  id: number; plan_id: number; name: string; lat: number; lon: number; notes: string | null;
+};
+
+export function insertFullPlan(
+  origin: string,
+  destination: string,
+  distance_miles: number,
+  drive_time_minutes: number,
+  notes: string,
+  sleepSpot: SpotInput,
+  bathSpot: SpotInput
+): void {
+  const db = getDb();
+  db.withTransactionSync(() => {
+    const { lastInsertRowId: planId } = db.runSync(
+      `INSERT INTO plans (origin, destination, distance_miles, drive_time_minutes, status, created_at, notes)
+       VALUES (?, ?, ?, ?, 'upcoming', ?, ?)`,
+      [origin, destination, distance_miles, drive_time_minutes, Date.now(), notes]
+    );
+    db.runSync(
+      `INSERT INTO plan_sleep_spots (plan_id, name, lat, lon, notes) VALUES (?, ?, ?, ?, ?)`,
+      [planId, sleepSpot.name, sleepSpot.lat, sleepSpot.lon, sleepSpot.notes]
+    );
+    db.runSync(
+      `INSERT INTO plan_bath_spots (plan_id, name, lat, lon, notes) VALUES (?, ?, ?, ?, ?)`,
+      [planId, bathSpot.name, bathSpot.lat, bathSpot.lon, bathSpot.notes]
+    );
+  });
+}
+
+export function getActivePlanBathSpot(): PlanBathSpotRow | null {
+  return getDb().getFirstSync<PlanBathSpotRow>(
+    `SELECT b.id, b.plan_id, b.name, b.lat, b.lon, b.notes
+     FROM plan_bath_spots b
+     JOIN plans p ON b.plan_id = p.id
+     WHERE p.status IN ('current', 'upcoming')
+     ORDER BY CASE p.status WHEN 'current' THEN 0 ELSE 1 END, p.created_at DESC
+     LIMIT 1`
+  ) ?? null;
 }
 
 // ---------------------------------------------------------------------------
