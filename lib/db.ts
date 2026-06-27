@@ -46,6 +46,35 @@ const MIGRATIONS: string[][] = [
   [
     `ALTER TABLE plans ADD COLUMN notes TEXT`,
   ],
+  // v4
+  [
+    `CREATE TABLE IF NOT EXISTS hot_springs (
+      id   INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      lat  REAL NOT NULL,
+      lon  REAL NOT NULL
+    )`,
+    // Hand-seeded starter set of well-known western US hot springs with verified coordinates.
+    // Should be replaced with the full NOAA "Thermal Springs List for the United States"
+    // (CC0 public domain, 1,661 locations) once the dataset file is sourced and added to
+    // the project. IDs are hardcoded so OR IGNORE prevents re-seeding on re-apply.
+    `INSERT OR IGNORE INTO hot_springs (id, name, lat, lon) VALUES
+      (1,  'Granite Hot Springs',            43.369257, -110.446079),
+      (2,  'Boiling River (Yellowstone NP)', 44.989800, -110.666500),
+      (3,  'Strawberry Park Hot Springs',    40.547700, -106.842800),
+      (4,  'Conundrum Hot Springs',          38.972700, -107.039600),
+      (5,  'Ouray Hot Springs Pool',         38.022800, -107.671400),
+      (6,  'Glenwood Hot Springs',           39.550500, -107.324700),
+      (7,  'Pagosa Springs',                 37.269700, -107.009900),
+      (8,  'Travertine Hot Springs',         38.269000, -119.224500),
+      (9,  'Buckeye Hot Spring',             38.331900, -119.240800),
+      (10, 'Kirkham Hot Springs',            44.079700, -115.658300),
+      (11, 'Burgdorf Hot Springs',           45.374200, -115.650300),
+      (12, 'Jerry Johnson Hot Springs',      46.299800, -114.884500),
+      (13, 'Goldbug Hot Springs',            45.129200, -114.006900),
+      (14, 'Umpqua Hot Springs',             43.289700, -122.360000),
+      (15, 'The Homestead Crater',           40.361100, -111.494400)`,
+  ],
 ];
 
 export function runMigrations(): void {
@@ -139,6 +168,15 @@ export function getPlansByStatus(status: PlanRow['status']): PlanRow[] {
     `SELECT * FROM plans WHERE status = ? ORDER BY created_at DESC`,
     [status]
   );
+}
+
+// ---------------------------------------------------------------------------
+// Hot springs helpers
+// ---------------------------------------------------------------------------
+export type HotSpringRow = { id: number; name: string; lat: number; lon: number };
+
+export function getHotSprings(): HotSpringRow[] {
+  return getDb().getAllSync<HotSpringRow>(`SELECT id, name, lat, lon FROM hot_springs ORDER BY id`);
 }
 
 // ---------------------------------------------------------------------------
