@@ -3,6 +3,7 @@ export const Theme = {
   rust: '#B5512C',
   cream: '#F4F0E8',
   moss: '#5C6650',
+  gold: '#D89A4A',
   muted: '#6B6B6B',
   surface: '#252829',
   border: '#2E3235',

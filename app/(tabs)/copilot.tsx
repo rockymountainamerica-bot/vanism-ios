@@ -14,7 +14,6 @@ import Markdown from 'react-native-markdown-display';
 import { Theme } from '@/constants/Colors';
 
 const API_URL = 'https://vanism-ai.vercel.app/api/copilot';
-const SYSTEM = 'You are Vanism.ai Copilot, an expert van life travel assistant. Be concise and practical.';
 
 type Message = { role: 'user' | 'assistant'; content: string };
 
@@ -54,7 +53,7 @@ export default function CopilotScreen() {
       const res = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: next, system: SYSTEM }),
+        body: JSON.stringify({ messages: next }),
       });
       const data = await res.json();
       setMessages(prev => [...prev, { role: 'assistant', content: data.reply ?? 'No response.' }]);
