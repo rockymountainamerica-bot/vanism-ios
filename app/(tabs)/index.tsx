@@ -145,7 +145,12 @@ export default function BaseScreen() {
       <View style={styles.actionBar}>
         <TouchableOpacity style={styles.actionBtn} onPress={logSpot} disabled={locStatus === 'logging'}>
           <Text style={styles.actionLabel}>
-            {locStatus === 'logging' ? 'LOGGING…' : locStatus === 'done' ? '✓ LOGGED' : locStatus === 'error' ? 'ERROR' : '+ LOG'}
+            {locStatus === 'logging'             ? 'LOGGING…'
+              : locStatus === 'done'             ? '✓ LOGGED'
+              : locStatus === 'permission-denied' ? 'ENABLE LOCATION'
+              : locStatus === 'gps-error'        ? 'GPS TIMEOUT'
+              : locStatus === 'db-error'         ? 'SAVE FAILED'
+              : '+ LOG'}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.actionBtn, studioMode && styles.actionBtnActive]} onPress={toggleStudio}>

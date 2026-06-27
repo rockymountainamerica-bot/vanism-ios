@@ -46,7 +46,7 @@ export function useBase() {
   const [todaySpend, setTodaySpend] = useState(0);
   const [lastLoggedAt, setLastLoggedAt] = useState<number | null>(null);
   const [studioMode, setStudioModeState] = useState(false);
-  const [locStatus, setLocStatus] = useState<'idle' | 'logging' | 'done' | 'error'>('idle');
+  const [locStatus, setLocStatus] = useState<'idle' | 'logging' | 'done' | 'permission-denied' | 'gps-error' | 'db-error'>('idle');
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refresh = useCallback(() => {
@@ -68,18 +68,45 @@ export function useBase() {
 
   const logSpot = useCallback(async () => {
     setLocStatus('logging');
+
+    let status: string;
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') { setLocStatus('error'); return; }
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      insertSpot(loc.coords.latitude, loc.coords.longitude);
-      setLastLoggedAt(Date.now());
-      setLocStatus('done');
-      setTimeout(() => setLocStatus('idle'), 2000);
-    } catch {
-      setLocStatus('error');
-      setTimeout(() => setLocStatus('idle'), 2000);
+      ({ status } = await Location.requestForegroundPermissionsAsync());
+    } catch (err) {
+      console.warn('[logSpot] permission request threw:', err);
+      setLocStatus('permission-denied');
+      setTimeout(() => setLocStatus('idle'), 3000);
+      return;
     }
+    if (status !== 'granted') {
+      console.warn('[logSpot] permission denied, status:', status);
+      setLocStatus('permission-denied');
+      setTimeout(() => setLocStatus('idle'), 3000);
+      return;
+    }
+
+    let loc: Location.LocationObject;
+    try {
+      loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    } catch (err) {
+      console.warn('[logSpot] GPS fetch failed:', err);
+      setLocStatus('gps-error');
+      setTimeout(() => setLocStatus('idle'), 3000);
+      return;
+    }
+
+    try {
+      insertSpot(loc.coords.latitude, loc.coords.longitude);
+    } catch (err) {
+      console.warn('[logSpot] DB write failed:', err);
+      setLocStatus('db-error');
+      setTimeout(() => setLocStatus('idle'), 3000);
+      return;
+    }
+
+    setLastLoggedAt(Date.now());
+    setLocStatus('done');
+    setTimeout(() => setLocStatus('idle'), 2000);
   }, []);
 
   const logSpend = useCallback((raw: string) => {
