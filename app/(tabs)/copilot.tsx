@@ -12,10 +12,44 @@ import {
 } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { Theme } from '@/constants/Colors';
+import { insertPlan } from '@/lib/db';
 
 const API_URL = 'https://vanism-ai.vercel.app/api/copilot';
 
-type Message = { role: 'user' | 'assistant'; content: string };
+type Plan = { origin: string; destination: string; distance_miles: number; drive_time_minutes: number };
+type Message = { role: 'user' | 'assistant'; content: string; plan?: Plan };
+
+function formatDriveTime(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m}min`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}min`;
+}
+
+function PlanCard({ plan }: { plan: Plan }) {
+  const [approved, setApproved] = useState(false);
+
+  function approve() {
+    if (approved) return;
+    insertPlan(plan.origin, plan.destination, plan.distance_miles, plan.drive_time_minutes);
+    setApproved(true);
+  }
+
+  return (
+    <View style={cardStyles.card}>
+      <View style={cardStyles.route}>
+        <Text style={cardStyles.location}>{plan.origin}</Text>
+        <Text style={cardStyles.arrow}> → </Text>
+        <Text style={cardStyles.location}>{plan.destination}</Text>
+      </View>
+      <Text style={cardStyles.meta}>{plan.distance_miles} mi · {formatDriveTime(plan.drive_time_minutes)}</Text>
+      <TouchableOpacity style={[cardStyles.btn, approved && cardStyles.btnDone]} onPress={approve} disabled={approved}>
+        <Text style={cardStyles.btnText}>{approved ? '✓ Saved to Plan' : 'Approve Plan'}</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
 
 const markdownStyles = {
   body: { color: Theme.cream, fontFamily: 'Archivo', fontSize: 14, lineHeight: 22 },
@@ -56,7 +90,7 @@ export default function CopilotScreen() {
         body: JSON.stringify({ messages: next }),
       });
       const data = await res.json();
-      setMessages(prev => [...prev, { role: 'assistant', content: data.reply ?? 'No response.' }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: data.reply ?? 'No response.', plan: data.plan ?? undefined }]);
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: 'No signal.' }]);
     }
@@ -73,12 +107,15 @@ export default function CopilotScreen() {
         onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
       >
         {messages.map((m, i) => (
-          <View key={i} style={[styles.bubble, m.role === 'user' ? styles.userBubble : styles.aiBubble]}>
-            {m.role === 'assistant' ? (
-              <Markdown style={markdownStyles}>{m.content}</Markdown>
-            ) : (
-              <Text style={styles.userText}>{m.content}</Text>
-            )}
+          <View key={i}>
+            <View style={[styles.bubble, m.role === 'user' ? styles.userBubble : styles.aiBubble]}>
+              {m.role === 'assistant' ? (
+                <Markdown style={markdownStyles}>{m.content}</Markdown>
+              ) : (
+                <Text style={styles.userText}>{m.content}</Text>
+              )}
+            </View>
+            {m.plan && <PlanCard plan={m.plan} />}
           </View>
         ))}
         {loading && (
@@ -123,4 +160,15 @@ const styles = StyleSheet.create({
   sendBtn: { backgroundColor: Theme.rust, borderRadius: 10, paddingHorizontal: 18, justifyContent: 'center', alignItems: 'center' },
   sendBtnDisabled: { opacity: 0.5 },
   sendLabel: { color: Theme.cream, fontFamily: 'Archivo-Bold', fontSize: 13, letterSpacing: 1 },
+});
+
+const cardStyles = StyleSheet.create({
+  card: { backgroundColor: Theme.surface, borderWidth: 1, borderColor: Theme.border, borderRadius: 12, padding: 14, marginTop: 6, marginBottom: 4 },
+  route: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 },
+  location: { fontFamily: 'Archivo-SemiBold', fontSize: 14, color: Theme.cream },
+  arrow: { fontFamily: 'Archivo-Bold', fontSize: 14, color: Theme.rust },
+  meta: { fontFamily: 'Archivo', fontSize: 12, color: Theme.muted, marginBottom: 10 },
+  btn: { backgroundColor: Theme.rust, borderRadius: 8, paddingVertical: 8, alignItems: 'center' },
+  btnDone: { backgroundColor: Theme.moss },
+  btnText: { fontFamily: 'Archivo-Bold', fontSize: 12, color: Theme.cream, letterSpacing: 0.6 },
 });

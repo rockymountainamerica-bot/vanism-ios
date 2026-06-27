@@ -30,6 +30,18 @@ const MIGRATIONS: string[][] = [
       value TEXT NOT NULL
     )`,
   ],
+  // v2
+  [
+    `CREATE TABLE IF NOT EXISTS plans (
+      id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+      origin             TEXT    NOT NULL,
+      destination        TEXT    NOT NULL,
+      distance_miles     REAL    NOT NULL,
+      drive_time_minutes INTEGER NOT NULL,
+      status             TEXT    NOT NULL DEFAULT 'upcoming',
+      created_at         INTEGER NOT NULL
+    )`,
+  ],
 ];
 
 export function runMigrations(): void {
@@ -88,6 +100,38 @@ export function getTodayBudgetLogs(): BudgetRow[] {
   return getDb().getAllSync<BudgetRow>(
     `SELECT id, amount, item, logged_at FROM budget_logs WHERE logged_at >= ? ORDER BY logged_at DESC`,
     [startOfDay.getTime()]
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Plan helpers
+// ---------------------------------------------------------------------------
+export type PlanRow = {
+  id: number;
+  origin: string;
+  destination: string;
+  distance_miles: number;
+  drive_time_minutes: number;
+  status: 'upcoming' | 'current' | 'past';
+  created_at: number;
+};
+
+export function insertPlan(
+  origin: string,
+  destination: string,
+  distance_miles: number,
+  drive_time_minutes: number
+): void {
+  getDb().runSync(
+    `INSERT INTO plans (origin, destination, distance_miles, drive_time_minutes, status, created_at) VALUES (?, ?, ?, ?, 'upcoming', ?)`,
+    [origin, destination, distance_miles, drive_time_minutes, Date.now()]
+  );
+}
+
+export function getPlansByStatus(status: PlanRow['status']): PlanRow[] {
+  return getDb().getAllSync<PlanRow>(
+    `SELECT * FROM plans WHERE status = ? ORDER BY created_at DESC`,
+    [status]
   );
 }
 
