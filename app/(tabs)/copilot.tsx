@@ -27,12 +27,12 @@ function formatDriveTime(minutes: number): string {
   return `${h}h ${m}min`;
 }
 
-function PlanCard({ plan }: { plan: Plan }) {
+function PlanCard({ plan, replyText }: { plan: Plan; replyText: string }) {
   const [approved, setApproved] = useState(false);
 
   function approve() {
     if (approved) return;
-    insertPlan(plan.origin, plan.destination, plan.distance_miles, plan.drive_time_minutes);
+    insertPlan(plan.origin, plan.destination, plan.distance_miles, plan.drive_time_minutes, replyText);
     setApproved(true);
   }
 
@@ -115,7 +115,7 @@ export default function CopilotScreen() {
                 <Text style={styles.userText}>{m.content}</Text>
               )}
             </View>
-            {m.plan && <PlanCard plan={m.plan} />}
+            {m.plan && <PlanCard plan={m.plan} replyText={m.content} />}
           </View>
         ))}
         {loading && (

@@ -42,6 +42,10 @@ const MIGRATIONS: string[][] = [
       created_at         INTEGER NOT NULL
     )`,
   ],
+  // v3
+  [
+    `ALTER TABLE plans ADD COLUMN notes TEXT`,
+  ],
 ];
 
 export function runMigrations(): void {
@@ -114,17 +118,19 @@ export type PlanRow = {
   drive_time_minutes: number;
   status: 'upcoming' | 'current' | 'past';
   created_at: number;
+  notes: string | null;
 };
 
 export function insertPlan(
   origin: string,
   destination: string,
   distance_miles: number,
-  drive_time_minutes: number
+  drive_time_minutes: number,
+  notes: string
 ): void {
   getDb().runSync(
-    `INSERT INTO plans (origin, destination, distance_miles, drive_time_minutes, status, created_at) VALUES (?, ?, ?, ?, 'upcoming', ?)`,
-    [origin, destination, distance_miles, drive_time_minutes, Date.now()]
+    `INSERT INTO plans (origin, destination, distance_miles, drive_time_minutes, status, created_at, notes) VALUES (?, ?, ?, ?, 'upcoming', ?, ?)`,
+    [origin, destination, distance_miles, drive_time_minutes, Date.now(), notes]
   );
 }
 
