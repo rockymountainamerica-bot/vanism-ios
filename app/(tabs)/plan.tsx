@@ -6,10 +6,15 @@ import { Theme } from '@/constants/Colors';
 import {
   getPlansByStatus,
   PlanRow,
+  PlanSleepSpotRow,
+  PlanBathSpotRow,
   SpotInput,
+  completePlan,
   promotePlanToCurrent,
   upsertPlanSleepSpot,
   upsertPlanBathSpot,
+  getSleepSpotForPlan,
+  getBathSpotForPlan,
 } from '@/lib/db';
 
 const API_URL = 'https://vanism-ai.vercel.app/api/copilot';
@@ -43,20 +48,37 @@ const SECTION_DEFS: SectionDef[] = [
 
 type LoadState = 'idle' | 'loading' | 'error';
 
+function SpotSection({ label, spot }: { label: string; spot: PlanSleepSpotRow | PlanBathSpotRow }) {
+  return (
+    <>
+      <View style={styles.divider} />
+      <Text style={styles.spotLabel}>{label}</Text>
+      <Text style={styles.spotName}>{spot.name}</Text>
+      {spot.notes ? <Text style={styles.spotNotes}>{spot.notes}</Text> : null}
+    </>
+  );
+}
+
 function PlanItem({
   item,
   expanded,
   loadState,
   onPress,
   onLoad,
+  onComplete,
 }: {
   item: PlanRow;
   expanded: boolean;
   loadState: LoadState;
   onPress: () => void;
   onLoad: () => void;
+  onComplete: () => void;
 }) {
   const date = new Date(item.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' });
+
+  const sleepSpot = expanded ? getSleepSpotForPlan(item.id) : null;
+  const bathSpot  = expanded ? getBathSpotForPlan(item.id)  : null;
+
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
       <View style={styles.row}>
@@ -69,6 +91,15 @@ function PlanItem({
           <Text style={styles.meta}>{item.distance_miles} mi · {formatDriveTime(item.drive_time_minutes)}</Text>
         </View>
         <Text style={styles.date}>{date}</Text>
+        {item.status === 'current' && (
+          <TouchableOpacity
+            style={styles.completeBtn}
+            onPress={onComplete}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={styles.completeBtnText}>Done</Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           style={[styles.loadBtn, loadState === 'error' && styles.loadBtnError]}
           onPress={onLoad}
@@ -84,10 +115,16 @@ function PlanItem({
           )}
         </TouchableOpacity>
       </View>
-      {expanded && item.notes && (
+      {expanded && (
         <View style={styles.notesWrap}>
-          <View style={styles.divider} />
-          <Markdown style={markdownStyles}>{item.notes}</Markdown>
+          {item.notes && (
+            <>
+              <View style={styles.divider} />
+              <Markdown style={markdownStyles}>{item.notes}</Markdown>
+            </>
+          )}
+          {sleepSpot && <SpotSection label="SLEEP" spot={sleepSpot} />}
+          {bathSpot  && <SpotSection label="BATH"  spot={bathSpot}  />}
         </View>
       )}
     </TouchableOpacity>
@@ -151,6 +188,11 @@ export default function PlanScreen() {
     }
   }
 
+  function handleComplete(plan: PlanRow) {
+    completePlan(plan.id);
+    load();
+  }
+
   return (
     <SectionList
       style={styles.root}
@@ -172,6 +214,7 @@ export default function PlanScreen() {
             }
             onPress={() => setExpandedId(prev => (prev === item.id ? null : item.id))}
             onLoad={() => loadSpots(item)}
+            onComplete={() => handleComplete(item)}
           />
         ) : (
           <Text style={styles.empty}>{(section as SectionData).emptyLabel}</Text>
@@ -194,6 +237,11 @@ const styles = StyleSheet.create({
   loadBtn: { backgroundColor: Theme.rust, borderRadius: 6, paddingVertical: 5, paddingHorizontal: 12, marginLeft: 10, minWidth: 52, alignItems: 'center', justifyContent: 'center' },
   loadBtnError: { backgroundColor: Theme.muted },
   loadBtnText: { fontFamily: 'Archivo-Bold', fontSize: 11, color: Theme.cream, letterSpacing: 0.5 },
+  completeBtn: { borderWidth: 1, borderColor: Theme.border, borderRadius: 6, paddingVertical: 5, paddingHorizontal: 10, marginLeft: 10 },
+  completeBtnText: { fontFamily: 'Archivo-Bold', fontSize: 11, color: Theme.muted, letterSpacing: 0.5 },
   notesWrap: { paddingBottom: 16, paddingTop: 4 },
-  divider: { height: 1, backgroundColor: Theme.border, marginBottom: 12 },
+  divider: { height: 1, backgroundColor: Theme.border, marginVertical: 10 },
+  spotLabel: { fontFamily: 'Archivo-SemiBold', fontSize: 9, color: Theme.muted, letterSpacing: 1.4, marginBottom: 4 },
+  spotName: { fontFamily: 'Archivo-SemiBold', fontSize: 13, color: Theme.cream, marginBottom: 3 },
+  spotNotes: { fontFamily: 'Archivo', fontSize: 13, color: Theme.muted, lineHeight: 19 },
 });

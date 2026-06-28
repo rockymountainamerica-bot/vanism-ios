@@ -249,6 +249,24 @@ export function promotePlanToCurrent(plan_id: number): void {
   });
 }
 
+export function getSleepSpotForPlan(plan_id: number): PlanSleepSpotRow | null {
+  return getDb().getFirstSync<PlanSleepSpotRow>(
+    `SELECT id, plan_id, name, lat, lon, notes FROM plan_sleep_spots WHERE plan_id = ? LIMIT 1`,
+    [plan_id]
+  ) ?? null;
+}
+
+export function getBathSpotForPlan(plan_id: number): PlanBathSpotRow | null {
+  return getDb().getFirstSync<PlanBathSpotRow>(
+    `SELECT id, plan_id, name, lat, lon, notes FROM plan_bath_spots WHERE plan_id = ? LIMIT 1`,
+    [plan_id]
+  ) ?? null;
+}
+
+export function completePlan(plan_id: number): void {
+  getDb().runSync(`UPDATE plans SET status = 'past' WHERE id = ?`, [plan_id]);
+}
+
 export function getActivePlanSleepSpot(): PlanSleepSpotRow | null {
   return getDb().getFirstSync<PlanSleepSpotRow>(
     `SELECT s.id, s.plan_id, s.name, s.lat, s.lon, s.notes
