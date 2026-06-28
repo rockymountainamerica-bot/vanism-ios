@@ -8,13 +8,13 @@ import {
   PlanRow,
   PlanSleepSpotRow,
   PlanBathSpotRow,
-  SpotInput,
+  MultiDaySpotInput,
   ValidatedActivityCategory,
   ValidatedActivitySpot,
   completePlan,
   promotePlanToCurrent,
-  upsertPlanSleepSpot,
-  upsertPlanBathSpot,
+  upsertPlanSleepSpots,
+  upsertPlanBathSpots,
   upsertPlanActivities,
   getSleepSpotForPlan,
   getBathSpotForPlan,
@@ -23,6 +23,27 @@ import {
 const API_URL = 'https://vanism-ai.vercel.app/api/copilot';
 const SPOTS_RE      = /---SPOTS---\n([\s\S]*?)\n---END---/;
 const ACTIVITIES_RE = /---ACTIVITIES---\n([\s\S]*?)\n---END---/;
+
+function parseSpotsArray(raw: unknown): MultiDaySpotInput[] {
+  if (!Array.isArray(raw)) return [];
+  return (raw as unknown[]).reduce<MultiDaySpotInput[]>((acc, s, i) => {
+    if (
+      s !== null && typeof s === 'object' &&
+      typeof (s as any).name === 'string' &&
+      typeof (s as any).lat === 'number' &&
+      typeof (s as any).lon === 'number'
+    ) {
+      acc.push({
+        name: (s as any).name,
+        lat: (s as any).lat,
+        lon: (s as any).lon,
+        notes: typeof (s as any).notes === 'string' ? (s as any).notes : '',
+        day_number: typeof (s as any).day_number === 'number' ? (s as any).day_number : i + 1,
+      });
+    }
+    return acc;
+  }, []);
+}
 
 function parseActivities(raw: string): ValidatedActivityCategory[] {
   const match = raw.match(ACTIVITIES_RE);
@@ -185,14 +206,20 @@ export default function PlanScreen() {
     setLoadingPlanId(plan.id);
     setErrorPlanId(null);
 
-    const prompt = `I need sleep/bath spots and activity recommendations for a drive from ${plan.origin} to ${plan.destination} (${plan.distance_miles} mi, ~${formatDriveTime(plan.drive_time_minutes)} drive). Reply with ONLY these two blocks in order — no other text:
+    const numSleepStops = Math.max(1, Math.ceil(plan.drive_time_minutes / 420) - 1);
+    const numBathStops  = Math.ceil(numSleepStops / 2);
+
+    const prompt = `I need overnight stop recommendations for a drive from ${plan.origin} to ${plan.destination} (${plan.distance_miles} mi, ~${formatDriveTime(plan.drive_time_minutes)} drive).
+
+Generate exactly ${numSleepStops} sleep stop${numSleepStops > 1 ? 's' : ''} (day_number 1–${numSleepStops}) and ${numBathStops} bath stop${numBathStops > 1 ? 's' : ''} (day_number 1–${numBathStops}), spaced evenly along the route — not clustered near one end. Include 2-3 activity categories with 2-3 specific named spots each, genuinely suited to this route.
+
+Reply with ONLY these two blocks in order — no other text:
 ---SPOTS---
-{"sleep_spot":{"name":"<name>","lat":<number>,"lon":<number>,"notes":"<1-2 sentences>"},"bath_spot":{"name":"<name>","lat":<number>,"lon":<number>,"notes":"<1-2 sentences>"}}
+{"sleep_spots":[{"name":"<name>","lat":<number>,"lon":<number>,"notes":"<1-2 sentences>","day_number":1}],"bath_spots":[{"name":"<name>","lat":<number>,"lon":<number>,"notes":"<1-2 sentences>","day_number":1}]}
 ---END---
 ---ACTIVITIES---
-[{"category":"<activity type relevant to this specific route>","spots":[{"name":"<specific named place>","lat":<number>,"lon":<number>,"notes":"<1-2 sentences>"},{"name":"<specific named place>","lat":<number>,"lon":<number>,"notes":"<1-2 sentences>"}]},{"category":"<second activity type>","spots":[...]}]
----END---
-Use 2-3 categories with 2-3 spots each. Choose activities genuinely suited to this route and region — not generic suggestions.`;
+[{"category":"<type>","spots":[{"name":"<name>","lat":<number>,"lon":<number>,"notes":"<1-2 sentences>"}]}]
+---END---`;
 
     try {
       const res = await fetch(API_URL, {
@@ -205,13 +232,17 @@ Use 2-3 categories with 2-3 spots each. Choose activities genuinely suited to th
 
       const spotsMatch = raw.match(SPOTS_RE);
       if (!spotsMatch) throw new Error('no spots block');
-      const spots = JSON.parse(spotsMatch[1]) as { sleep_spot: SpotInput; bath_spot: SpotInput };
-      if (!spots.sleep_spot || !spots.bath_spot) throw new Error('missing spots');
+      const spotsJson = JSON.parse(spotsMatch[1]);
 
-      upsertPlanSleepSpot(plan.id, spots.sleep_spot);
-      upsertPlanBathSpot(plan.id, spots.bath_spot);
+      const sleepSpots = parseSpotsArray(spotsJson?.sleep_spots);
+      if (sleepSpots.length === 0) throw new Error('no valid sleep spots');
+      upsertPlanSleepSpots(plan.id, sleepSpots);
 
-      // Activities are parsed and saved independently — failure doesn't block spots
+      // Bath parsed independently — skip silently if missing/malformed
+      const bathSpots = parseSpotsArray(spotsJson?.bath_spots);
+      if (bathSpots.length > 0) upsertPlanBathSpots(plan.id, bathSpots);
+
+      // Activities independent — failure never blocks sleep/bath
       const activities = parseActivities(raw);
       if (activities.length > 0) upsertPlanActivities(plan.id, activities);
 

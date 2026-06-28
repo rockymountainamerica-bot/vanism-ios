@@ -131,6 +131,13 @@ const MIGRATIONS: string[][] = [
       notes       TEXT
     )`,
   ],
+  // v8 — multi-day trip support: day_number on sleep/bath spots, day cursors on plans
+  [
+    `ALTER TABLE plan_sleep_spots ADD COLUMN day_number INTEGER NOT NULL DEFAULT 1`,
+    `ALTER TABLE plan_bath_spots  ADD COLUMN day_number INTEGER NOT NULL DEFAULT 1`,
+    `ALTER TABLE plans ADD COLUMN current_sleep_day INTEGER NOT NULL DEFAULT 1`,
+    `ALTER TABLE plans ADD COLUMN current_bath_day  INTEGER NOT NULL DEFAULT 1`,
+  ],
 ];
 
 export function runMigrations(): void {
@@ -204,6 +211,8 @@ export type PlanRow = {
   status: 'upcoming' | 'current' | 'past';
   created_at: number;
   notes: string | null;
+  current_sleep_day: number;
+  current_bath_day: number;
 };
 
 export function insertPlan(
@@ -227,34 +236,44 @@ export function getPlansByStatus(status: PlanRow['status']): PlanRow[] {
 }
 
 export type SpotInput = { name: string; lat: number; lon: number; notes: string };
+export type MultiDaySpotInput = SpotInput & { day_number: number };
 
 export type PlanSleepSpotRow = {
-  id: number; plan_id: number; name: string; lat: number; lon: number; notes: string | null;
+  id: number; plan_id: number; name: string; lat: number; lon: number; notes: string | null; day_number: number;
 };
 
 export type PlanBathSpotRow = {
-  id: number; plan_id: number; name: string; lat: number; lon: number; notes: string | null;
+  id: number; plan_id: number; name: string; lat: number; lon: number; notes: string | null; day_number: number;
 };
 
-export function upsertPlanSleepSpot(plan_id: number, spot: SpotInput): void {
+export type ActivePlanSleepData = { planId: number; currentDay: number; spots: PlanSleepSpotRow[] };
+export type ActivePlanBathData  = { planId: number; currentDay: number; spots: PlanBathSpotRow[] };
+
+export function upsertPlanSleepSpots(plan_id: number, spots: MultiDaySpotInput[]): void {
   const db = getDb();
   db.withTransactionSync(() => {
     db.runSync(`DELETE FROM plan_sleep_spots WHERE plan_id = ?`, [plan_id]);
-    db.runSync(
-      `INSERT INTO plan_sleep_spots (plan_id, name, lat, lon, notes) VALUES (?, ?, ?, ?, ?)`,
-      [plan_id, spot.name, spot.lat, spot.lon, spot.notes]
-    );
+    for (const s of spots) {
+      db.runSync(
+        `INSERT INTO plan_sleep_spots (plan_id, name, lat, lon, notes, day_number) VALUES (?, ?, ?, ?, ?, ?)`,
+        [plan_id, s.name, s.lat, s.lon, s.notes, s.day_number]
+      );
+    }
+    db.runSync(`UPDATE plans SET current_sleep_day = 1 WHERE id = ?`, [plan_id]);
   });
 }
 
-export function upsertPlanBathSpot(plan_id: number, spot: SpotInput): void {
+export function upsertPlanBathSpots(plan_id: number, spots: MultiDaySpotInput[]): void {
   const db = getDb();
   db.withTransactionSync(() => {
     db.runSync(`DELETE FROM plan_bath_spots WHERE plan_id = ?`, [plan_id]);
-    db.runSync(
-      `INSERT INTO plan_bath_spots (plan_id, name, lat, lon, notes) VALUES (?, ?, ?, ?, ?)`,
-      [plan_id, spot.name, spot.lat, spot.lon, spot.notes]
-    );
+    for (const s of spots) {
+      db.runSync(
+        `INSERT INTO plan_bath_spots (plan_id, name, lat, lon, notes, day_number) VALUES (?, ?, ?, ?, ?, ?)`,
+        [plan_id, s.name, s.lat, s.lon, s.notes, s.day_number]
+      );
+    }
+    db.runSync(`UPDATE plans SET current_bath_day = 1 WHERE id = ?`, [plan_id]);
   });
 }
 
@@ -268,14 +287,14 @@ export function promotePlanToCurrent(plan_id: number): void {
 
 export function getSleepSpotForPlan(plan_id: number): PlanSleepSpotRow | null {
   return getDb().getFirstSync<PlanSleepSpotRow>(
-    `SELECT id, plan_id, name, lat, lon, notes FROM plan_sleep_spots WHERE plan_id = ? LIMIT 1`,
+    `SELECT id, plan_id, name, lat, lon, notes, day_number FROM plan_sleep_spots WHERE plan_id = ? ORDER BY day_number LIMIT 1`,
     [plan_id]
   ) ?? null;
 }
 
 export function getBathSpotForPlan(plan_id: number): PlanBathSpotRow | null {
   return getDb().getFirstSync<PlanBathSpotRow>(
-    `SELECT id, plan_id, name, lat, lon, notes FROM plan_bath_spots WHERE plan_id = ? LIMIT 1`,
+    `SELECT id, plan_id, name, lat, lon, notes, day_number FROM plan_bath_spots WHERE plan_id = ? ORDER BY day_number LIMIT 1`,
     [plan_id]
   ) ?? null;
 }
@@ -284,26 +303,48 @@ export function completePlan(plan_id: number): void {
   getDb().runSync(`UPDATE plans SET status = 'past' WHERE id = ?`, [plan_id]);
 }
 
-export function getActivePlanSleepSpot(): PlanSleepSpotRow | null {
-  return getDb().getFirstSync<PlanSleepSpotRow>(
-    `SELECT s.id, s.plan_id, s.name, s.lat, s.lon, s.notes
-     FROM plan_sleep_spots s
-     JOIN plans p ON s.plan_id = p.id
-     WHERE p.status IN ('current', 'upcoming')
-     ORDER BY CASE p.status WHEN 'current' THEN 0 ELSE 1 END, p.created_at DESC
-     LIMIT 1`
-  ) ?? null;
+export function setSleepDay(plan_id: number, day: number): void {
+  getDb().runSync(`UPDATE plans SET current_sleep_day = ? WHERE id = ?`, [day, plan_id]);
 }
 
-export function getActivePlanBathSpot(): PlanBathSpotRow | null {
-  return getDb().getFirstSync<PlanBathSpotRow>(
-    `SELECT b.id, b.plan_id, b.name, b.lat, b.lon, b.notes
-     FROM plan_bath_spots b
-     JOIN plans p ON b.plan_id = p.id
-     WHERE p.status IN ('current', 'upcoming')
-     ORDER BY CASE p.status WHEN 'current' THEN 0 ELSE 1 END, p.created_at DESC
+export function setBathDay(plan_id: number, day: number): void {
+  getDb().runSync(`UPDATE plans SET current_bath_day = ? WHERE id = ?`, [day, plan_id]);
+}
+
+export function getActivePlanSleepData(): ActivePlanSleepData | null {
+  const db = getDb();
+  const plan = db.getFirstSync<{ id: number; current_sleep_day: number }>(
+    `SELECT id, current_sleep_day FROM plans
+     WHERE status IN ('current', 'upcoming')
+     ORDER BY CASE status WHEN 'current' THEN 0 ELSE 1 END, created_at DESC
      LIMIT 1`
-  ) ?? null;
+  );
+  if (!plan) return null;
+  const spots = db.getAllSync<PlanSleepSpotRow>(
+    `SELECT id, plan_id, name, lat, lon, notes, day_number FROM plan_sleep_spots
+     WHERE plan_id = ? ORDER BY day_number`,
+    [plan.id]
+  );
+  if (spots.length === 0) return null;
+  return { planId: plan.id, currentDay: plan.current_sleep_day, spots };
+}
+
+export function getActivePlanBathData(): ActivePlanBathData | null {
+  const db = getDb();
+  const plan = db.getFirstSync<{ id: number; current_bath_day: number }>(
+    `SELECT id, current_bath_day FROM plans
+     WHERE status IN ('current', 'upcoming')
+     ORDER BY CASE status WHEN 'current' THEN 0 ELSE 1 END, created_at DESC
+     LIMIT 1`
+  );
+  if (!plan) return null;
+  const spots = db.getAllSync<PlanBathSpotRow>(
+    `SELECT id, plan_id, name, lat, lon, notes, day_number FROM plan_bath_spots
+     WHERE plan_id = ? ORDER BY day_number`,
+    [plan.id]
+  );
+  if (spots.length === 0) return null;
+  return { planId: plan.id, currentDay: plan.current_bath_day, spots };
 }
 
 // ---------------------------------------------------------------------------
