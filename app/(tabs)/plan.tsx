@@ -206,7 +206,7 @@ export default function PlanScreen() {
     setLoadingPlanId(plan.id);
     setErrorPlanId(null);
 
-    const numSleepStops = Math.max(1, Math.ceil(plan.drive_time_minutes / 420) - 1);
+    const numSleepStops = Math.max(1, Math.ceil(plan.drive_time_minutes / 330) - 1);
     const numBathStops  = Math.ceil(numSleepStops / 2);
 
     const prompt = `I need overnight stop recommendations for a drive from ${plan.origin} to ${plan.destination} (${plan.distance_miles} mi, ~${formatDriveTime(plan.drive_time_minutes)} drive).
