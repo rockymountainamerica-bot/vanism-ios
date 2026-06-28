@@ -9,16 +9,46 @@ import {
   PlanSleepSpotRow,
   PlanBathSpotRow,
   SpotInput,
+  ValidatedActivityCategory,
+  ValidatedActivitySpot,
   completePlan,
   promotePlanToCurrent,
   upsertPlanSleepSpot,
   upsertPlanBathSpot,
+  upsertPlanActivities,
   getSleepSpotForPlan,
   getBathSpotForPlan,
 } from '@/lib/db';
 
 const API_URL = 'https://vanism-ai.vercel.app/api/copilot';
-const SPOTS_RE = /---SPOTS---\n([\s\S]*?)\n---END---/;
+const SPOTS_RE      = /---SPOTS---\n([\s\S]*?)\n---END---/;
+const ACTIVITIES_RE = /---ACTIVITIES---\n([\s\S]*?)\n---END---/;
+
+function parseActivities(raw: string): ValidatedActivityCategory[] {
+  const match = raw.match(ACTIVITIES_RE);
+  if (!match) return [];
+  let parsed: unknown;
+  try { parsed = JSON.parse(match[1]); } catch { return []; }
+  if (!Array.isArray(parsed)) return [];
+  const result: ValidatedActivityCategory[] = [];
+  for (const cat of parsed as unknown[]) {
+    if (typeof (cat as any)?.category !== 'string' || !Array.isArray((cat as any)?.spots)) continue;
+    const validSpots: ValidatedActivitySpot[] = ((cat as any).spots as unknown[]).reduce<ValidatedActivitySpot[]>((acc, s) => {
+      if (
+        s !== null && typeof s === 'object' &&
+        typeof (s as any).name === 'string' &&
+        typeof (s as any).lat === 'number' &&
+        typeof (s as any).lon === 'number'
+      ) {
+        acc.push({ name: (s as any).name, lat: (s as any).lat, lon: (s as any).lon, notes: typeof (s as any).notes === 'string' ? (s as any).notes : '' });
+      }
+      return acc;
+    }, []);
+    if (validSpots.length === 0) continue;
+    result.push({ name: (cat as any).category, spots: validSpots });
+  }
+  return result;
+}
 
 function formatDriveTime(minutes: number): string {
   const h = Math.floor(minutes / 60);
@@ -155,10 +185,14 @@ export default function PlanScreen() {
     setLoadingPlanId(plan.id);
     setErrorPlanId(null);
 
-    const prompt = `I need one sleep spot and one bath spot for a drive from ${plan.origin} to ${plan.destination} (${plan.distance_miles} mi, ~${formatDriveTime(plan.drive_time_minutes)} drive). Reply with ONLY the following block — no other text:
+    const prompt = `I need sleep/bath spots and activity recommendations for a drive from ${plan.origin} to ${plan.destination} (${plan.distance_miles} mi, ~${formatDriveTime(plan.drive_time_minutes)} drive). Reply with ONLY these two blocks in order — no other text:
 ---SPOTS---
 {"sleep_spot":{"name":"<name>","lat":<number>,"lon":<number>,"notes":"<1-2 sentences>"},"bath_spot":{"name":"<name>","lat":<number>,"lon":<number>,"notes":"<1-2 sentences>"}}
----END---`;
+---END---
+---ACTIVITIES---
+[{"category":"<activity type relevant to this specific route>","spots":[{"name":"<specific named place>","lat":<number>,"lon":<number>,"notes":"<1-2 sentences>"},{"name":"<specific named place>","lat":<number>,"lon":<number>,"notes":"<1-2 sentences>"}]},{"category":"<second activity type>","spots":[...]}]
+---END---
+Use 2-3 categories with 2-3 spots each. Choose activities genuinely suited to this route and region — not generic suggestions.`;
 
     try {
       const res = await fetch(API_URL, {
@@ -168,13 +202,18 @@ export default function PlanScreen() {
       });
       const data = await res.json();
       const raw: string = data.reply ?? '';
-      const match = raw.match(SPOTS_RE);
-      if (!match) throw new Error('no spots block');
-      const spots = JSON.parse(match[1]) as { sleep_spot: SpotInput; bath_spot: SpotInput };
+
+      const spotsMatch = raw.match(SPOTS_RE);
+      if (!spotsMatch) throw new Error('no spots block');
+      const spots = JSON.parse(spotsMatch[1]) as { sleep_spot: SpotInput; bath_spot: SpotInput };
       if (!spots.sleep_spot || !spots.bath_spot) throw new Error('missing spots');
 
       upsertPlanSleepSpot(plan.id, spots.sleep_spot);
       upsertPlanBathSpot(plan.id, spots.bath_spot);
+
+      // Activities are parsed and saved independently — failure doesn't block spots
+      const activities = parseActivities(raw);
+      if (activities.length > 0) upsertPlanActivities(plan.id, activities);
 
       if (plan.status === 'upcoming') {
         promotePlanToCurrent(plan.id);

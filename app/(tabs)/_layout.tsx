@@ -15,8 +15,11 @@ const screenOptions = {
   tabBarStyle,
   tabBarActiveTintColor: Theme.rust,
   tabBarInactiveTintColor: Theme.muted,
-  tabBarLabelStyle: { fontFamily: 'Archivo-SemiBold', fontSize: 10, letterSpacing: 0.8 },
+  tabBarLabelStyle: { fontFamily: 'Archivo-SemiBold', fontSize: 8, letterSpacing: 0.6 },
+  tabBarIconStyle: { marginBottom: -2 },
 };
+
+const ICON_SIZE = 18;
 
 export default function TabLayout() {
   return (
@@ -26,7 +29,7 @@ export default function TabLayout() {
         options={{
           title: 'BASE',
           tabBarIcon: ({ color }) => (
-            <SymbolView name={{ ios: 'mappin.and.ellipse', android: 'place', web: 'place' }} tintColor={color} size={22} />
+            <SymbolView name={{ ios: 'mappin.and.ellipse', android: 'place', web: 'place' }} tintColor={color} size={ICON_SIZE} />
           ),
         }}
       />
@@ -35,7 +38,7 @@ export default function TabLayout() {
         options={{
           title: 'COPILOT',
           tabBarIcon: ({ color }) => (
-            <SymbolView name={{ ios: 'paperplane.fill', android: 'send', web: 'send' }} tintColor={color} size={22} />
+            <SymbolView name={{ ios: 'paperplane.fill', android: 'send', web: 'send' }} tintColor={color} size={ICON_SIZE} />
           ),
         }}
       />
@@ -44,7 +47,16 @@ export default function TabLayout() {
         options={{
           title: 'PLAN',
           tabBarIcon: ({ color }) => (
-            <SymbolView name={{ ios: 'map.fill', android: 'map', web: 'map' }} tintColor={color} size={22} />
+            <SymbolView name={{ ios: 'map.fill', android: 'map', web: 'map' }} tintColor={color} size={ICON_SIZE} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="activity"
+        options={{
+          title: 'ACTIVITY',
+          tabBarIcon: ({ color }) => (
+            <SymbolView name={{ ios: 'figure.hiking', android: 'directions_walk', web: 'directions_walk' }} tintColor={color} size={ICON_SIZE} />
           ),
         }}
       />
@@ -53,7 +65,7 @@ export default function TabLayout() {
         options={{
           title: 'SLEEP',
           tabBarIcon: ({ color }) => (
-            <SymbolView name={{ ios: 'moon.fill', android: 'bedtime', web: 'bedtime' }} tintColor={color} size={22} />
+            <SymbolView name={{ ios: 'moon.fill', android: 'bedtime', web: 'bedtime' }} tintColor={color} size={ICON_SIZE} />
           ),
         }}
       />
@@ -62,7 +74,7 @@ export default function TabLayout() {
         options={{
           title: 'BATH',
           tabBarIcon: ({ color }) => (
-            <SymbolView name={{ ios: 'drop.fill', android: 'water_drop', web: 'water_drop' }} tintColor={color} size={22} />
+            <SymbolView name={{ ios: 'drop.fill', android: 'water_drop', web: 'water_drop' }} tintColor={color} size={ICON_SIZE} />
           ),
         }}
       />

@@ -114,6 +114,23 @@ const MIGRATIONS: string[][] = [
       notes    TEXT
     )`,
   ],
+  // v7
+  [
+    `CREATE TABLE IF NOT EXISTS plan_activity_categories (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      plan_id    INTEGER NOT NULL REFERENCES plans(id),
+      name       TEXT    NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0
+    )`,
+    `CREATE TABLE IF NOT EXISTS plan_activity_spots (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      category_id INTEGER NOT NULL REFERENCES plan_activity_categories(id),
+      name        TEXT    NOT NULL,
+      lat         REAL    NOT NULL,
+      lon         REAL    NOT NULL,
+      notes       TEXT
+    )`,
+  ],
 ];
 
 export function runMigrations(): void {
@@ -287,6 +304,62 @@ export function getActivePlanBathSpot(): PlanBathSpotRow | null {
      ORDER BY CASE p.status WHEN 'current' THEN 0 ELSE 1 END, p.created_at DESC
      LIMIT 1`
   ) ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Activity helpers
+// ---------------------------------------------------------------------------
+export type ActivityCategoryRow = { id: number; plan_id: number; name: string; sort_order: number };
+export type ActivitySpotRow = { id: number; category_id: number; name: string; lat: number; lon: number; notes: string | null };
+export type ActivityCategoryWithSpots = { category: ActivityCategoryRow; spots: ActivitySpotRow[] };
+export type ValidatedActivitySpot = { name: string; lat: number; lon: number; notes: string };
+export type ValidatedActivityCategory = { name: string; spots: ValidatedActivitySpot[] };
+
+export function upsertPlanActivities(plan_id: number, categories: ValidatedActivityCategory[]): void {
+  const db = getDb();
+  db.withTransactionSync(() => {
+    const existing = db.getAllSync<{ id: number }>(
+      `SELECT id FROM plan_activity_categories WHERE plan_id = ?`, [plan_id]
+    );
+    for (const cat of existing) {
+      db.runSync(`DELETE FROM plan_activity_spots WHERE category_id = ?`, [cat.id]);
+    }
+    db.runSync(`DELETE FROM plan_activity_categories WHERE plan_id = ?`, [plan_id]);
+    for (let i = 0; i < categories.length; i++) {
+      const { lastInsertRowId: catId } = db.runSync(
+        `INSERT INTO plan_activity_categories (plan_id, name, sort_order) VALUES (?, ?, ?)`,
+        [plan_id, categories[i].name, i]
+      );
+      for (const spot of categories[i].spots) {
+        db.runSync(
+          `INSERT INTO plan_activity_spots (category_id, name, lat, lon, notes) VALUES (?, ?, ?, ?, ?)`,
+          [catId, spot.name, spot.lat, spot.lon, spot.notes]
+        );
+      }
+    }
+  });
+}
+
+export function getActivePlanActivities(): ActivityCategoryWithSpots[] {
+  const db = getDb();
+  const planRow = db.getFirstSync<{ id: number }>(
+    `SELECT id FROM plans
+     WHERE status IN ('current', 'upcoming')
+     ORDER BY CASE status WHEN 'current' THEN 0 ELSE 1 END, created_at DESC
+     LIMIT 1`
+  );
+  if (!planRow) return [];
+  const categories = db.getAllSync<ActivityCategoryRow>(
+    `SELECT id, plan_id, name, sort_order FROM plan_activity_categories
+     WHERE plan_id = ? ORDER BY sort_order`, [planRow.id]
+  );
+  return categories.map(cat => ({
+    category: cat,
+    spots: db.getAllSync<ActivitySpotRow>(
+      `SELECT id, category_id, name, lat, lon, notes FROM plan_activity_spots
+       WHERE category_id = ? ORDER BY id`, [cat.id]
+    ),
+  }));
 }
 
 // ---------------------------------------------------------------------------
