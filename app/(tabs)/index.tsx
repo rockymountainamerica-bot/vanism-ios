@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   FlatList,
@@ -12,7 +12,9 @@ import {
   View,
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
+import { useFocusEffect } from 'expo-router';
 import { Theme } from '@/constants/Colors';
+import { AchievementRow, getAllUniqueAchievementNames, getUniqueEarnedAchievements } from '@/lib/db';
 import { DAILY_BUDGET, ringColor, useBase, useSentinel } from '@/hooks/useBase';
 
 // ---------------------------------------------------------------------------
@@ -127,14 +129,65 @@ function SpendInput({ onSubmit, onCancel }: { onSubmit: (raw: string) => boolean
 }
 
 // ---------------------------------------------------------------------------
+// Achievements Strip
+// ---------------------------------------------------------------------------
+function AchievementsStrip() {
+  const all = getAllUniqueAchievementNames();
+  const earned = new Set(getUniqueEarnedAchievements().map(r => r.name));
+
+  if (all.length === 0) return null;
+
+  return (
+    <View style={styles.achieveWrap}>
+      <Text style={styles.achieveHeader}>ACHIEVEMENTS</Text>
+      {all.map(a => {
+        const done = earned.has(a.name);
+        return (
+          <View key={a.name} style={styles.achieveRow}>
+            <Text style={[styles.achieveMark, done ? styles.achieveMarkEarned : styles.achieveMarkLocked]}>
+              {done ? '✓' : '○'}
+            </Text>
+            <Text style={[styles.achieveName, done ? styles.achieveNameEarned : styles.achieveNameLocked]}>
+              {a.name}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// New Achievement Toast
+// ---------------------------------------------------------------------------
+function AchievementToast({ achievement }: { achievement: AchievementRow }) {
+  return (
+    <View style={styles.toast} pointerEvents="none">
+      <Text style={styles.toastStar}>★</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.toastLabel}>ACHIEVEMENT UNLOCKED</Text>
+        <Text style={styles.toastName}>{achievement.name}</Text>
+      </View>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main screen
 // ---------------------------------------------------------------------------
 export default function BaseScreen() {
-  const { logs, todaySpend, lastLoggedAt, studioMode, locStatus, logSpot, logSpend, toggleStudio } = useBase();
+  const { logs, todaySpend, lastLoggedAt, studioMode, challengeMode, newAchievements, locStatus, logSpot, logSpend, toggleStudio, refresh } = useBase();
   const [spendOpen, setSpendOpen] = useState(false);
+
+  useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
 
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
+      {/* New achievement toast — absolute overlay */}
+      {newAchievements.length > 0 && (
+        <AchievementToast achievement={newAchievements[0]} />
+      )}
+
       {/* Ring */}
       <StatusRing spend={todaySpend} />
 
@@ -192,6 +245,7 @@ export default function BaseScreen() {
             <Text style={styles.logAmount}>${item.amount.toFixed(2)}</Text>
           </View>
         )}
+        ListFooterComponent={challengeMode ? <AchievementsStrip /> : null}
       />
     </KeyboardAvoidingView>
   );
@@ -233,4 +287,26 @@ const styles = StyleSheet.create({
   logItem: { fontFamily: 'Archivo-SemiBold', fontSize: 14, color: Theme.cream },
   logTime: { fontFamily: 'Archivo', fontSize: 11, color: Theme.muted, marginTop: 2 },
   logAmount: { fontFamily: 'Archivo-Bold', fontSize: 15, color: Theme.gold },
+
+  // Achievements strip
+  achieveWrap: { marginTop: 24, marginBottom: 8 },
+  achieveHeader: { fontFamily: 'Archivo-SemiBold', fontSize: 10, color: Theme.muted, letterSpacing: 1.5, marginBottom: 10 },
+  achieveRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: Theme.border },
+  achieveMark: { fontFamily: 'Archivo-Bold', fontSize: 13, marginRight: 10 },
+  achieveMarkEarned: { color: Theme.gold },
+  achieveMarkLocked: { color: Theme.muted },
+  achieveName: { fontFamily: 'Archivo-SemiBold', fontSize: 13 },
+  achieveNameEarned: { color: Theme.cream },
+  achieveNameLocked: { color: Theme.muted },
+
+  // Achievement toast
+  toast: {
+    position: 'absolute', top: 0, left: 16, right: 16, zIndex: 100,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: Theme.surface, borderWidth: 1, borderColor: Theme.gold,
+    borderRadius: 12, padding: 14,
+  },
+  toastStar: { fontSize: 22, color: Theme.gold },
+  toastLabel: { fontFamily: 'Archivo-SemiBold', fontSize: 9, color: Theme.gold, letterSpacing: 1.4, marginBottom: 2 },
+  toastName: { fontFamily: 'Archivo-Bold', fontSize: 14, color: Theme.cream },
 });

@@ -138,6 +138,32 @@ const MIGRATIONS: string[][] = [
     `ALTER TABLE plans ADD COLUMN current_sleep_day INTEGER NOT NULL DEFAULT 1`,
     `ALTER TABLE plans ADD COLUMN current_bath_day  INTEGER NOT NULL DEFAULT 1`,
   ],
+  // v9 — Challenge Mode: achievements + user_achievements
+  [
+    `CREATE TABLE IF NOT EXISTS achievements (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      name           TEXT    NOT NULL,
+      type           TEXT    NOT NULL,
+      lat            REAL    NOT NULL,
+      lon            REAL    NOT NULL,
+      radius_meters  REAL    NOT NULL,
+      description    TEXT
+    )`,
+    `CREATE TABLE IF NOT EXISTS user_achievements (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      achievement_id INTEGER NOT NULL REFERENCES achievements(id),
+      earned_at      INTEGER NOT NULL
+    )`,
+    // Yellowstone entrances — all share the name "Yellowstone Arrival"; only the first
+    // hit awards the achievement (dedup by name in checkAndAwardAchievements).
+    `INSERT OR IGNORE INTO achievements (id, name, type, lat, lon, radius_meters, description) VALUES
+      (1, 'Yellowstone Arrival', 'park_entrance', 45.02955, -110.70870, 150, 'North Entrance — Gardiner, MT'),
+      (2, 'Yellowstone Arrival', 'park_entrance', 45.00336, -110.00128, 150, 'Northeast Entrance — Cooke City, MT'),
+      (3, 'Yellowstone Arrival', 'park_entrance', 44.48845, -110.00383, 150, 'East Entrance — Cody, WY corridor'),
+      (4, 'Yellowstone Arrival', 'park_entrance', 44.13249, -110.66468, 150, 'South Entrance — Jackson, WY corridor'),
+      (5, 'Yellowstone Arrival', 'park_entrance', 44.65841, -111.09719, 150, 'West Entrance — West Yellowstone, MT'),
+      (6, 'Mount Washburn Summit', 'summit', 44.7854936, -110.4540905, 150, 'Dunraven Pass trailhead — summit of Mount Washburn')`,
+  ],
 ];
 
 export function runMigrations(): void {
@@ -345,6 +371,60 @@ export function getActivePlanBathData(): ActivePlanBathData | null {
   );
   if (spots.length === 0) return null;
   return { planId: plan.id, currentDay: plan.current_bath_day, spots };
+}
+
+// ---------------------------------------------------------------------------
+// Achievement helpers
+// ---------------------------------------------------------------------------
+export type AchievementRow = { id: number; name: string; type: string; lat: number; lon: number; radius_meters: number; description: string | null };
+
+function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6_371_000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+export function checkAndAwardAchievements(lat: number, lon: number): AchievementRow[] {
+  const db = getDb();
+  const all = db.getAllSync<AchievementRow>(
+    `SELECT id, name, type, lat, lon, radius_meters, description FROM achievements`
+  );
+  const earnedNames = new Set(
+    db.getAllSync<{ name: string }>(
+      `SELECT DISTINCT a.name FROM user_achievements ua JOIN achievements a ON ua.achievement_id = a.id`
+    ).map(r => r.name)
+  );
+  const newlyEarned: AchievementRow[] = [];
+  for (const a of all) {
+    if (earnedNames.has(a.name)) continue;
+    if (haversineMeters(lat, lon, a.lat, a.lon) <= a.radius_meters) {
+      db.runSync(
+        `INSERT INTO user_achievements (achievement_id, earned_at) VALUES (?, ?)`,
+        [a.id, Date.now()]
+      );
+      earnedNames.add(a.name);
+      newlyEarned.push(a);
+    }
+  }
+  return newlyEarned;
+}
+
+export function getAllUniqueAchievementNames(): { name: string; type: string }[] {
+  return getDb().getAllSync<{ name: string; type: string }>(
+    `SELECT DISTINCT name, type FROM achievements ORDER BY id`
+  );
+}
+
+export function getUniqueEarnedAchievements(): { name: string; type: string; earned_at: number }[] {
+  return getDb().getAllSync<{ name: string; type: string; earned_at: number }>(
+    `SELECT a.name, a.type, MIN(ua.earned_at) as earned_at
+     FROM user_achievements ua JOIN achievements a ON ua.achievement_id = a.id
+     GROUP BY a.name ORDER BY earned_at ASC`
+  );
 }
 
 // ---------------------------------------------------------------------------

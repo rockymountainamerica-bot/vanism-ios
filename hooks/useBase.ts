@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Location from 'expo-location';
 import {
+  AchievementRow,
   BudgetRow,
+  checkAndAwardAchievements,
   getLastSpot,
   getTodayBudgetLogs,
   getSetting,
@@ -46,6 +48,8 @@ export function useBase() {
   const [todaySpend, setTodaySpend] = useState(0);
   const [lastLoggedAt, setLastLoggedAt] = useState<number | null>(null);
   const [studioMode, setStudioModeState] = useState(false);
+  const [challengeMode, setChallengeMode] = useState(false);
+  const [newAchievements, setNewAchievements] = useState<AchievementRow[]>([]);
   const [locStatus, setLocStatus] = useState<'idle' | 'logging' | 'done' | 'permission-denied' | 'gps-error' | 'db-error'>('idle');
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -55,6 +59,7 @@ export function useBase() {
     setTodaySpend(rows.reduce((s, r) => s + r.amount, 0));
     const spot = getLastSpot();
     if (spot) setLastLoggedAt(spot.logged_at);
+    setChallengeMode(getSetting('challengeModeEnabled', '0') === '1');
   }, []);
 
   useEffect(() => {
@@ -107,6 +112,14 @@ export function useBase() {
     setLastLoggedAt(Date.now());
     setLocStatus('done');
     setTimeout(() => setLocStatus('idle'), 2000);
+
+    if (getSetting('challengeModeEnabled', '0') === '1') {
+      const earned = checkAndAwardAchievements(loc.coords.latitude, loc.coords.longitude);
+      if (earned.length > 0) {
+        setNewAchievements(earned);
+        setTimeout(() => setNewAchievements([]), 4000);
+      }
+    }
   }, []);
 
   const logSpend = useCallback((raw: string) => {
@@ -125,5 +138,5 @@ export function useBase() {
     });
   }, []);
 
-  return { logs, todaySpend, lastLoggedAt, studioMode, locStatus, logSpot, logSpend, toggleStudio, refresh };
+  return { logs, todaySpend, lastLoggedAt, studioMode, challengeMode, newAchievements, locStatus, logSpot, logSpend, toggleStudio, refresh };
 }

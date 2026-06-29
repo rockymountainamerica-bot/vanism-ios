@@ -1,5 +1,6 @@
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
+import { TouchableOpacity } from 'react-native';
 import { Theme } from '@/constants/Colors';
 
 const tabBarStyle = {
@@ -22,14 +23,25 @@ const screenOptions = {
 const ICON_SIZE = 18;
 
 export default function TabLayout() {
+  const router = useRouter();
+
   return (
     <Tabs screenOptions={screenOptions}>
       <Tabs.Screen
         name="index"
         options={{
           title: 'BASE',
+          headerRight: () => (
+            <TouchableOpacity
+              onPress={() => router.push('/settings')}
+              style={{ marginRight: 16 }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <SymbolView name={{ ios: 'gear', android: 'settings', web: 'settings' }} tintColor={Theme.muted} size={20} />
+            </TouchableOpacity>
+          ),
           tabBarIcon: ({ color }) => (
-            <SymbolView name={{ ios: 'mappin.and.ellipse', android: 'place', web: 'place' }} tintColor={color} size={ICON_SIZE} />
+            <SymbolView name={{ ios: 'car.fill', android: 'directions_car', web: 'directions_car' }} tintColor={color} size={ICON_SIZE} />
           ),
         }}
       />
