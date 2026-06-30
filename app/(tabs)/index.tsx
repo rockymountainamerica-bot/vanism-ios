@@ -1,21 +1,38 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
+  Modal,
   Platform,
+  SafeAreaView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import MapView, { Callout, Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import Svg, { Circle } from 'react-native-svg';
 import { useFocusEffect } from 'expo-router';
 import { Theme } from '@/constants/Colors';
 import { AchievementRow, getAllUniqueAchievementNames, getUniqueEarnedAchievements } from '@/lib/db';
 import { DAILY_BUDGET, ringColor, useBase, useSentinel } from '@/hooks/useBase';
+
+// Coordinates for each seeded achievement (keyed by name)
+const ACHIEVEMENT_COORDS: Record<string, { latitude: number; longitude: number }> = {
+  'Yellowstone Arrival':   { latitude: 45.02955,    longitude: -110.70870 },
+  'Mount Washburn Summit': { latitude: 44.7854936,  longitude: -110.4540905 },
+};
+
+const US_REGION = {
+  latitude: 39.5,
+  longitude: -98.35,
+  latitudeDelta: 30,
+  longitudeDelta: 55,
+};
 
 // ---------------------------------------------------------------------------
 // Status Ring
@@ -131,29 +148,82 @@ function SpendInput({ onSubmit, onCancel }: { onSubmit: (raw: string) => boolean
 // ---------------------------------------------------------------------------
 // Achievements Strip
 // ---------------------------------------------------------------------------
-function AchievementsStrip() {
+function AchievementsStrip({ onPress }: { onPress: () => void }) {
   const all = getAllUniqueAchievementNames();
   const earned = new Set(getUniqueEarnedAchievements().map(r => r.name));
 
   if (all.length === 0) return null;
 
   return (
-    <View style={styles.achieveWrap}>
-      <Text style={styles.achieveHeader}>ACHIEVEMENTS</Text>
-      {all.map(a => {
-        const done = earned.has(a.name);
-        return (
-          <View key={a.name} style={styles.achieveRow}>
-            <Text style={[styles.achieveMark, done ? styles.achieveMarkEarned : styles.achieveMarkLocked]}>
-              {done ? '✓' : '○'}
-            </Text>
-            <Text style={[styles.achieveName, done ? styles.achieveNameEarned : styles.achieveNameLocked]}>
-              {a.name}
-            </Text>
-          </View>
-        );
-      })}
-    </View>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.75}>
+      <View style={styles.achieveWrap}>
+        <Text style={styles.achieveHeader}>ACHIEVEMENTS</Text>
+        {all.map(a => {
+          const done = earned.has(a.name);
+          return (
+            <View key={a.name} style={styles.achieveRow}>
+              <Text style={[styles.achieveMark, done ? styles.achieveMarkEarned : styles.achieveMarkLocked]}>
+                {done ? '✓' : '○'}
+              </Text>
+              <Text style={[styles.achieveName, done ? styles.achieveNameEarned : styles.achieveNameLocked]}>
+                {a.name}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Achievements Map Modal
+// ---------------------------------------------------------------------------
+function AchievementsMapModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const earnedRows = getUniqueEarnedAchievements();
+  const earnedMap = new Map(earnedRows.map(r => [r.name, r.earned_at]));
+
+  return (
+    <Modal visible={visible} animationType="slide" statusBarTranslucent>
+      <View style={{ flex: 1 }}>
+        <MapView
+          style={{ flex: 1 }}
+          provider={PROVIDER_DEFAULT}
+          mapType="hybrid"
+          initialRegion={US_REGION}
+          showsUserLocation={false}
+        >
+          {Object.entries(ACHIEVEMENT_COORDS).map(([name, coord]) => {
+            const earned_at = earnedMap.get(name);
+            const isEarned = earned_at !== undefined;
+            const subtitle = isEarned
+              ? `Earned ${new Date(earned_at!).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}`
+              : 'Locked';
+            return (
+              <Marker
+                key={name}
+                coordinate={coord}
+                pinColor={isEarned ? Theme.gold : Theme.muted}
+              >
+                <Callout tooltip={false}>
+                  <View style={styles.callout}>
+                    <Text style={styles.calloutName}>{name}</Text>
+                    <Text style={styles.calloutSub}>{subtitle}</Text>
+                  </View>
+                </Callout>
+              </Marker>
+            );
+          })}
+        </MapView>
+
+        {/* Close button */}
+        <SafeAreaView style={styles.closeWrap} pointerEvents="box-none">
+          <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.85}>
+            <Text style={styles.closeBtnText}>✕</Text>
+          </TouchableOpacity>
+        </SafeAreaView>
+      </View>
+    </Modal>
   );
 }
 
@@ -178,11 +248,22 @@ function AchievementToast({ achievement }: { achievement: AchievementRow }) {
 export default function BaseScreen() {
   const { logs, todaySpend, lastLoggedAt, studioMode, challengeMode, newAchievements, locStatus, logSpot, logSpend, toggleStudio, refresh } = useBase();
   const [spendOpen, setSpendOpen] = useState(false);
+  const [mapVisible, setMapVisible] = useState(false);
+
+  function handleStripPress() {
+    if (!challengeMode) {
+      Alert.alert('Challenge Mode', 'Enable Challenge Mode in Settings to view the achievement map.');
+      return;
+    }
+    setMapVisible(true);
+  }
 
   useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
 
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
+      <AchievementsMapModal visible={mapVisible} onClose={() => setMapVisible(false)} />
+
       {/* New achievement toast — absolute overlay */}
       {newAchievements.length > 0 && (
         <AchievementToast achievement={newAchievements[0]} />
@@ -245,7 +326,7 @@ export default function BaseScreen() {
             <Text style={styles.logAmount}>${item.amount.toFixed(2)}</Text>
           </View>
         )}
-        ListFooterComponent={challengeMode ? <AchievementsStrip /> : null}
+        ListFooterComponent={challengeMode ? <AchievementsStrip onPress={handleStripPress} /> : null}
       />
     </KeyboardAvoidingView>
   );
@@ -298,6 +379,14 @@ const styles = StyleSheet.create({
   achieveName: { fontFamily: 'Archivo-SemiBold', fontSize: 13 },
   achieveNameEarned: { color: Theme.cream },
   achieveNameLocked: { color: Theme.muted },
+
+  // Map modal
+  closeWrap: { position: 'absolute', top: 0, right: 0, left: 0, alignItems: 'flex-end', paddingRight: 16 },
+  closeBtn: { backgroundColor: Theme.charcoal, borderRadius: 20, width: 36, height: 36, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: Theme.border },
+  closeBtnText: { color: Theme.cream, fontSize: 15, fontFamily: 'Archivo-SemiBold' },
+  callout: { paddingHorizontal: 10, paddingVertical: 6, minWidth: 160 },
+  calloutName: { fontFamily: 'Archivo-Bold', fontSize: 13, color: '#1C1F22', marginBottom: 2 },
+  calloutSub: { fontFamily: 'Archivo', fontSize: 12, color: '#6B6B6B' },
 
   // Achievement toast
   toast: {
