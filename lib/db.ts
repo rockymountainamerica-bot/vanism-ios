@@ -461,6 +461,21 @@ export function upsertPlanActivities(plan_id: number, categories: ValidatedActiv
   });
 }
 
+export function getActivitiesForPlan(plan_id: number): ActivityCategoryWithSpots[] {
+  const db = getDb();
+  const categories = db.getAllSync<ActivityCategoryRow>(
+    `SELECT id, plan_id, name, sort_order FROM plan_activity_categories
+     WHERE plan_id = ? ORDER BY sort_order`, [plan_id]
+  );
+  return categories.map(cat => ({
+    category: cat,
+    spots: db.getAllSync<ActivitySpotRow>(
+      `SELECT id, category_id, name, lat, lon, notes FROM plan_activity_spots
+       WHERE category_id = ? ORDER BY id`, [cat.id]
+    ),
+  }));
+}
+
 export function getActivePlanActivities(): ActivityCategoryWithSpots[] {
   const db = getDb();
   const planRow = db.getFirstSync<{ id: number }>(

@@ -11,6 +11,7 @@ import {
   MultiDaySpotInput,
   ValidatedActivityCategory,
   ValidatedActivitySpot,
+  ActivityCategoryWithSpots,
   completePlan,
   promotePlanToCurrent,
   upsertPlanSleepSpots,
@@ -18,6 +19,7 @@ import {
   upsertPlanActivities,
   getSleepSpotForPlan,
   getBathSpotForPlan,
+  getActivitiesForPlan,
 } from '@/lib/db';
 
 const API_URL = 'https://vanism-ai.vercel.app/api/copilot';
@@ -110,6 +112,27 @@ function SpotSection({ label, spot }: { label: string; spot: PlanSleepSpotRow | 
   );
 }
 
+function ActivitySection({ categories }: { categories: ActivityCategoryWithSpots[] }) {
+  if (categories.length === 0) return null;
+  return (
+    <>
+      <View style={styles.divider} />
+      <Text style={styles.spotLabel}>ACTIVITIES</Text>
+      {categories.map(entry => (
+        <View key={entry.category.id} style={styles.activityCategory}>
+          <Text style={styles.activityCategoryName}>{entry.category.name.toUpperCase()}</Text>
+          {entry.spots.map(spot => (
+            <View key={spot.id} style={styles.activitySpot}>
+              <Text style={styles.activitySpotName}>{spot.name}</Text>
+              {spot.notes ? <Text style={styles.spotNotes}>{spot.notes}</Text> : null}
+            </View>
+          ))}
+        </View>
+      ))}
+    </>
+  );
+}
+
 function PlanItem({
   item,
   expanded,
@@ -127,8 +150,9 @@ function PlanItem({
 }) {
   const date = new Date(item.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' });
 
-  const sleepSpot = expanded ? getSleepSpotForPlan(item.id) : null;
-  const bathSpot  = expanded ? getBathSpotForPlan(item.id)  : null;
+  const sleepSpot  = expanded ? getSleepSpotForPlan(item.id)     : null;
+  const bathSpot   = expanded ? getBathSpotForPlan(item.id)      : null;
+  const activities = expanded ? getActivitiesForPlan(item.id)    : [];
 
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
@@ -176,6 +200,7 @@ function PlanItem({
           )}
           {sleepSpot && <SpotSection label="SLEEP" spot={sleepSpot} />}
           {bathSpot  && <SpotSection label="BATH"  spot={bathSpot}  />}
+          <ActivitySection categories={activities} />
         </View>
       )}
     </TouchableOpacity>
@@ -314,4 +339,8 @@ const styles = StyleSheet.create({
   spotLabel: { fontFamily: 'Archivo-SemiBold', fontSize: 9, color: Theme.muted, letterSpacing: 1.4, marginBottom: 4 },
   spotName: { fontFamily: 'Archivo-SemiBold', fontSize: 13, color: Theme.cream, marginBottom: 3 },
   spotNotes: { fontFamily: 'Archivo', fontSize: 13, color: Theme.muted, lineHeight: 19 },
+  activityCategory: { marginTop: 10 },
+  activityCategoryName: { fontFamily: 'Archivo-Bold', fontSize: 11, color: Theme.rust, letterSpacing: 1.1, marginBottom: 4 },
+  activitySpot: { paddingLeft: 8, marginBottom: 6 },
+  activitySpotName: { fontFamily: 'Archivo-SemiBold', fontSize: 13, color: Theme.cream, marginBottom: 2 },
 });
