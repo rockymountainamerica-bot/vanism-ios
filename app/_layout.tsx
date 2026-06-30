@@ -4,6 +4,7 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Theme } from '@/constants/Colors';
 import { runMigrations } from '@/lib/db';
 
@@ -36,10 +37,12 @@ export default function RootLayout() {
   if (!loaded) return null;
 
   return (
-    <Stack screenOptions={{ headerStyle: { backgroundColor: Theme.charcoal }, headerTintColor: Theme.cream, contentStyle: { backgroundColor: Theme.charcoal } }}>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="settings" options={{ title: 'SETTINGS', headerBackTitle: '' }} />
-      <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-    </Stack>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <Stack screenOptions={{ headerStyle: { backgroundColor: Theme.charcoal }, headerTintColor: Theme.cream, contentStyle: { backgroundColor: Theme.charcoal } }}>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="settings" options={{ title: 'SETTINGS', headerBackTitle: '' }} />
+        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+      </Stack>
+    </GestureHandlerRootView>
   );
 }

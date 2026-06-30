@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, SectionList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
+import { Animated, ActivityIndicator, PanResponder, SectionList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { useFocusEffect } from 'expo-router';
 import { Theme } from '@/constants/Colors';
@@ -135,6 +134,47 @@ function ActivitySection({ categories }: { categories: ActivityCategoryWithSpots
   );
 }
 
+const DELETE_WIDTH = 80;
+
+function SwipeableRow({ children, onDelete }: { children: React.ReactNode; onDelete: () => void }) {
+  const translateX = useRef(new Animated.Value(0)).current;
+
+  const pan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > Math.abs(g.dy) && g.dx < -4,
+      onPanResponderMove: (_, g) => {
+        translateX.setValue(Math.max(-DELETE_WIDTH, Math.min(0, g.dx)));
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dx < -(DELETE_WIDTH / 2)) {
+          Animated.spring(translateX, { toValue: -DELETE_WIDTH, useNativeDriver: true }).start();
+        } else {
+          Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
+        }
+      },
+    })
+  ).current;
+
+  function close() {
+    Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
+  }
+
+  return (
+    <View style={{ overflow: 'hidden' }}>
+      <TouchableOpacity
+        style={styles.deleteAction}
+        onPress={() => { close(); onDelete(); }}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.deleteActionText}>Delete</Text>
+      </TouchableOpacity>
+      <Animated.View style={{ transform: [{ translateX }] }} {...pan.panHandlers}>
+        {children}
+      </Animated.View>
+    </View>
+  );
+}
+
 function PlanItem({
   item,
   expanded,
@@ -158,14 +198,12 @@ function PlanItem({
   onDeleteConfirm: () => void;
   onDeleteCancel: () => void;
 }) {
-  const swipeRef = useRef<SwipeableMethods>(null);
   const date = new Date(item.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' });
 
   const sleepSpot  = expanded ? getSleepSpotForPlan(item.id)  : null;
   const bathSpot   = expanded ? getBathSpotForPlan(item.id)   : null;
   const activities = expanded ? getActivitiesForPlan(item.id) : [];
 
-  // Inline confirmation replaces the row entirely for current plans
   if (confirmingDelete) {
     return (
       <View style={[styles.row, styles.confirmRow]}>
@@ -173,10 +211,7 @@ function PlanItem({
         <TouchableOpacity style={styles.confirmBtn} onPress={onDeleteConfirm}>
           <Text style={styles.confirmBtnText}>Confirm</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.cancelBtn}
-          onPress={() => { swipeRef.current?.close(); onDeleteCancel(); }}
-        >
+        <TouchableOpacity style={styles.cancelBtn} onPress={onDeleteCancel}>
           <Text style={styles.cancelBtnText}>Cancel</Text>
         </TouchableOpacity>
       </View>
@@ -184,15 +219,7 @@ function PlanItem({
   }
 
   return (
-    <Swipeable
-      ref={swipeRef}
-      overshootRight={false}
-      renderRightActions={() => (
-        <TouchableOpacity style={styles.deleteAction} onPress={onDeleteRequest}>
-          <Text style={styles.deleteActionText}>Delete</Text>
-        </TouchableOpacity>
-      )}
-    >
+    <SwipeableRow onDelete={onDeleteRequest}>
       <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
         <View style={styles.row}>
           <View style={{ flex: 1 }}>
@@ -242,7 +269,7 @@ function PlanItem({
           </View>
         )}
       </TouchableOpacity>
-    </Swipeable>
+    </SwipeableRow>
   );
 }
 
@@ -403,8 +430,8 @@ const styles = StyleSheet.create({
   activitySpot: { paddingLeft: 8, marginBottom: 6 },
   activitySpotName: { fontFamily: 'Archivo-SemiBold', fontSize: 13, color: Theme.cream, marginBottom: 2 },
 
-  // Swipe delete action
-  deleteAction: { backgroundColor: Theme.rust, justifyContent: 'center', alignItems: 'center', width: 80, marginBottom: 1 },
+  // Swipe delete action (sits behind the sliding row via absolute positioning)
+  deleteAction: { position: 'absolute', right: 0, top: 0, bottom: 0, width: DELETE_WIDTH, backgroundColor: Theme.rust, justifyContent: 'center', alignItems: 'center' },
   deleteActionText: { fontFamily: 'Archivo-Bold', fontSize: 13, color: Theme.cream, letterSpacing: 0.5 },
 
   // Inline confirmation (current plan)
