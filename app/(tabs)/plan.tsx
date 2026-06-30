@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, SectionList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import Markdown from 'react-native-markdown-display';
 import { useFocusEffect } from 'expo-router';
 import { Theme } from '@/constants/Colors';
@@ -20,6 +21,7 @@ import {
   getSleepSpotForPlan,
   getBathSpotForPlan,
   getActivitiesForPlan,
+  deletePlan,
 } from '@/lib/db';
 
 const API_URL = 'https://vanism-ai.vercel.app/api/copilot';
@@ -137,73 +139,110 @@ function PlanItem({
   item,
   expanded,
   loadState,
+  confirmingDelete,
   onPress,
   onLoad,
   onComplete,
+  onDeleteRequest,
+  onDeleteConfirm,
+  onDeleteCancel,
 }: {
   item: PlanRow;
   expanded: boolean;
   loadState: LoadState;
+  confirmingDelete: boolean;
   onPress: () => void;
   onLoad: () => void;
   onComplete: () => void;
+  onDeleteRequest: () => void;
+  onDeleteConfirm: () => void;
+  onDeleteCancel: () => void;
 }) {
+  const swipeRef = useRef<SwipeableMethods>(null);
   const date = new Date(item.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' });
 
-  const sleepSpot  = expanded ? getSleepSpotForPlan(item.id)     : null;
-  const bathSpot   = expanded ? getBathSpotForPlan(item.id)      : null;
-  const activities = expanded ? getActivitiesForPlan(item.id)    : [];
+  const sleepSpot  = expanded ? getSleepSpotForPlan(item.id)  : null;
+  const bathSpot   = expanded ? getBathSpotForPlan(item.id)   : null;
+  const activities = expanded ? getActivitiesForPlan(item.id) : [];
 
-  return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
-      <View style={styles.row}>
-        <View style={{ flex: 1 }}>
-          <View style={styles.routeLine}>
-            <Text style={styles.location}>{item.origin}</Text>
-            <Text style={styles.arrow}> → </Text>
-            <Text style={styles.location}>{item.destination}</Text>
-          </View>
-          <Text style={styles.meta}>{item.distance_miles} mi · {formatDriveTime(item.drive_time_minutes)}</Text>
-        </View>
-        <Text style={styles.date}>{date}</Text>
-        {item.status === 'current' && (
-          <TouchableOpacity
-            style={styles.completeBtn}
-            onPress={onComplete}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text style={styles.completeBtnText}>Done</Text>
-          </TouchableOpacity>
-        )}
+  // Inline confirmation replaces the row entirely for current plans
+  if (confirmingDelete) {
+    return (
+      <View style={[styles.row, styles.confirmRow]}>
+        <Text style={styles.confirmText}>Delete active trip?</Text>
+        <TouchableOpacity style={styles.confirmBtn} onPress={onDeleteConfirm}>
+          <Text style={styles.confirmBtnText}>Confirm</Text>
+        </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.loadBtn, loadState === 'error' && styles.loadBtnError]}
-          onPress={onLoad}
-          disabled={loadState === 'loading'}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={styles.cancelBtn}
+          onPress={() => { swipeRef.current?.close(); onDeleteCancel(); }}
         >
-          {loadState === 'loading' ? (
-            <ActivityIndicator size="small" color={Theme.cream} />
-          ) : (
-            <Text style={styles.loadBtnText}>
-              {loadState === 'error' ? 'Retry' : 'Load'}
-            </Text>
-          )}
+          <Text style={styles.cancelBtnText}>Cancel</Text>
         </TouchableOpacity>
       </View>
-      {expanded && (
-        <View style={styles.notesWrap}>
-          {item.notes && (
-            <>
-              <View style={styles.divider} />
-              <Markdown style={markdownStyles}>{item.notes}</Markdown>
-            </>
-          )}
-          {sleepSpot && <SpotSection label="SLEEP" spot={sleepSpot} />}
-          {bathSpot  && <SpotSection label="BATH"  spot={bathSpot}  />}
-          <ActivitySection categories={activities} />
-        </View>
+    );
+  }
+
+  return (
+    <Swipeable
+      ref={swipeRef}
+      overshootRight={false}
+      renderRightActions={() => (
+        <TouchableOpacity style={styles.deleteAction} onPress={onDeleteRequest}>
+          <Text style={styles.deleteActionText}>Delete</Text>
+        </TouchableOpacity>
       )}
-    </TouchableOpacity>
+    >
+      <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
+        <View style={styles.row}>
+          <View style={{ flex: 1 }}>
+            <View style={styles.routeLine}>
+              <Text style={styles.location}>{item.origin}</Text>
+              <Text style={styles.arrow}> → </Text>
+              <Text style={styles.location}>{item.destination}</Text>
+            </View>
+            <Text style={styles.meta}>{item.distance_miles} mi · {formatDriveTime(item.drive_time_minutes)}</Text>
+          </View>
+          <Text style={styles.date}>{date}</Text>
+          {item.status === 'current' && (
+            <TouchableOpacity
+              style={styles.completeBtn}
+              onPress={onComplete}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={styles.completeBtnText}>Done</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={[styles.loadBtn, loadState === 'error' && styles.loadBtnError]}
+            onPress={onLoad}
+            disabled={loadState === 'loading'}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            {loadState === 'loading' ? (
+              <ActivityIndicator size="small" color={Theme.cream} />
+            ) : (
+              <Text style={styles.loadBtnText}>
+                {loadState === 'error' ? 'Retry' : 'Load'}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+        {expanded && (
+          <View style={styles.notesWrap}>
+            {item.notes && (
+              <>
+                <View style={styles.divider} />
+                <Markdown style={markdownStyles}>{item.notes}</Markdown>
+              </>
+            )}
+            {sleepSpot && <SpotSection label="SLEEP" spot={sleepSpot} />}
+            {bathSpot  && <SpotSection label="BATH"  spot={bathSpot}  />}
+            <ActivitySection categories={activities} />
+          </View>
+        )}
+      </TouchableOpacity>
+    </Swipeable>
   );
 }
 
@@ -214,6 +253,7 @@ export default function PlanScreen() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [loadingPlanId, setLoadingPlanId] = useState<number | null>(null);
   const [errorPlanId, setErrorPlanId] = useState<number | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   const load = useCallback(() => {
     setSections(
@@ -263,11 +303,9 @@ Reply with ONLY these two blocks in order — no other text:
       if (sleepSpots.length === 0) throw new Error('no valid sleep spots');
       upsertPlanSleepSpots(plan.id, sleepSpots);
 
-      // Bath parsed independently — skip silently if missing/malformed
       const bathSpots = parseSpotsArray(spotsJson?.bath_spots);
       if (bathSpots.length > 0) upsertPlanBathSpots(plan.id, bathSpots);
 
-      // Activities independent — failure never blocks sleep/bath
       const activities = parseActivities(raw);
       if (activities.length > 0) upsertPlanActivities(plan.id, activities);
 
@@ -285,6 +323,23 @@ Reply with ONLY these two blocks in order — no other text:
 
   function handleComplete(plan: PlanRow) {
     completePlan(plan.id);
+    load();
+  }
+
+  function handleDeleteRequest(plan: PlanRow) {
+    if (plan.status === 'current') {
+      setConfirmDeleteId(plan.id);
+    } else {
+      deletePlan(plan.id);
+      if (expandedId === plan.id) setExpandedId(null);
+      load();
+    }
+  }
+
+  function handleDeleteConfirm(plan: PlanRow) {
+    deletePlan(plan.id);
+    setConfirmDeleteId(null);
+    if (expandedId === plan.id) setExpandedId(null);
     load();
   }
 
@@ -307,9 +362,13 @@ Reply with ONLY these two blocks in order — no other text:
               : errorPlanId === item.id ? 'error'
               : 'idle'
             }
+            confirmingDelete={confirmDeleteId === item.id}
             onPress={() => setExpandedId(prev => (prev === item.id ? null : item.id))}
             onLoad={() => loadSpots(item)}
             onComplete={() => handleComplete(item)}
+            onDeleteRequest={() => handleDeleteRequest(item)}
+            onDeleteConfirm={() => handleDeleteConfirm(item)}
+            onDeleteCancel={() => setConfirmDeleteId(null)}
           />
         ) : (
           <Text style={styles.empty}>{(section as SectionData).emptyLabel}</Text>
@@ -323,7 +382,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Theme.charcoal, paddingHorizontal: 20 },
   sectionHeader: { fontFamily: 'Archivo-SemiBold', fontSize: 10, color: Theme.muted, letterSpacing: 1.5, marginTop: 24, marginBottom: 8 },
   empty: { fontFamily: 'Archivo', fontSize: 14, color: Theme.muted, paddingVertical: 10 },
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Theme.border },
+  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Theme.border, backgroundColor: Theme.charcoal },
   routeLine: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
   location: { fontFamily: 'Archivo-SemiBold', fontSize: 14, color: Theme.cream },
   arrow: { fontFamily: 'Archivo-Bold', fontSize: 14, color: Theme.rust },
@@ -334,7 +393,7 @@ const styles = StyleSheet.create({
   loadBtnText: { fontFamily: 'Archivo-Bold', fontSize: 11, color: Theme.cream, letterSpacing: 0.5 },
   completeBtn: { borderWidth: 1, borderColor: Theme.border, borderRadius: 6, paddingVertical: 5, paddingHorizontal: 10, marginLeft: 10 },
   completeBtnText: { fontFamily: 'Archivo-Bold', fontSize: 11, color: Theme.muted, letterSpacing: 0.5 },
-  notesWrap: { paddingBottom: 16, paddingTop: 4 },
+  notesWrap: { paddingBottom: 16, paddingTop: 4, backgroundColor: Theme.charcoal },
   divider: { height: 1, backgroundColor: Theme.border, marginVertical: 10 },
   spotLabel: { fontFamily: 'Archivo-SemiBold', fontSize: 9, color: Theme.muted, letterSpacing: 1.4, marginBottom: 4 },
   spotName: { fontFamily: 'Archivo-SemiBold', fontSize: 13, color: Theme.cream, marginBottom: 3 },
@@ -343,4 +402,16 @@ const styles = StyleSheet.create({
   activityCategoryName: { fontFamily: 'Archivo-Bold', fontSize: 11, color: Theme.rust, letterSpacing: 1.1, marginBottom: 4 },
   activitySpot: { paddingLeft: 8, marginBottom: 6 },
   activitySpotName: { fontFamily: 'Archivo-SemiBold', fontSize: 13, color: Theme.cream, marginBottom: 2 },
+
+  // Swipe delete action
+  deleteAction: { backgroundColor: Theme.rust, justifyContent: 'center', alignItems: 'center', width: 80, marginBottom: 1 },
+  deleteActionText: { fontFamily: 'Archivo-Bold', fontSize: 13, color: Theme.cream, letterSpacing: 0.5 },
+
+  // Inline confirmation (current plan)
+  confirmRow: { gap: 10 },
+  confirmText: { fontFamily: 'Archivo-SemiBold', fontSize: 13, color: Theme.cream, flex: 1 },
+  confirmBtn: { backgroundColor: Theme.rust, borderRadius: 6, paddingVertical: 5, paddingHorizontal: 12 },
+  confirmBtnText: { fontFamily: 'Archivo-Bold', fontSize: 11, color: Theme.cream, letterSpacing: 0.5 },
+  cancelBtn: { borderWidth: 1, borderColor: Theme.border, borderRadius: 6, paddingVertical: 5, paddingHorizontal: 12 },
+  cancelBtnText: { fontFamily: 'Archivo-Bold', fontSize: 11, color: Theme.muted, letterSpacing: 0.5 },
 });

@@ -461,6 +461,20 @@ export function upsertPlanActivities(plan_id: number, categories: ValidatedActiv
   });
 }
 
+export function deletePlan(plan_id: number): void {
+  const db = getDb();
+  db.withTransactionSync(() => {
+    db.runSync(
+      `DELETE FROM plan_activity_spots WHERE category_id IN
+       (SELECT id FROM plan_activity_categories WHERE plan_id = ?)`, [plan_id]
+    );
+    db.runSync(`DELETE FROM plan_activity_categories WHERE plan_id = ?`, [plan_id]);
+    db.runSync(`DELETE FROM plan_sleep_spots WHERE plan_id = ?`, [plan_id]);
+    db.runSync(`DELETE FROM plan_bath_spots WHERE plan_id = ?`, [plan_id]);
+    db.runSync(`DELETE FROM plans WHERE id = ?`, [plan_id]);
+  });
+}
+
 export function getActivitiesForPlan(plan_id: number): ActivityCategoryWithSpots[] {
   const db = getDb();
   const categories = db.getAllSync<ActivityCategoryRow>(
