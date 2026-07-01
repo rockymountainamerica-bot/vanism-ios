@@ -22,6 +22,7 @@ import {
   getActivitiesForPlan,
   deletePlan,
   getTripCostEstimate,
+  TripCostEstimate,
 } from '@/lib/db';
 
 const API_URL = 'https://vanism-ai.vercel.app/api/copilot';
@@ -131,6 +132,34 @@ function ActivitySection({ categories }: { categories: ActivityCategoryWithSpots
           ))}
         </View>
       ))}
+    </>
+  );
+}
+
+function CostSection({ estimate }: { estimate: TripCostEstimate }) {
+  const rows: { label: string; value: string }[] = [
+    { label: 'Fuel',       value: estimate.fuel !== null ? `$${Math.round(estimate.fuel)}` : '—' },
+    { label: 'Sleep',      value: `$${estimate.sleep}` },
+    { label: 'Bath',       value: `$${estimate.bath}` },
+    { label: 'Food',       value: `$${estimate.food}` },
+    { label: 'Park entry', value: estimate.parkEntry > 0 ? `$${estimate.parkEntry}` : '—' },
+    { label: 'Buffer',     value: `$${Math.round(estimate.buffer)}` },
+  ];
+  return (
+    <>
+      <View style={styles.divider} />
+      <Text style={styles.spotLabel}>TRIP COST</Text>
+      {rows.map(r => (
+        <View key={r.label} style={styles.costRow}>
+          <Text style={styles.costRowLabel}>{r.label}</Text>
+          <Text style={styles.costRowValue}>{r.value}</Text>
+        </View>
+      ))}
+      <View style={[styles.costRow, styles.costTotalRow]}>
+        <Text style={styles.costTotalLabel}>Total range</Text>
+        <Text style={styles.costTotal}>${Math.round(estimate.totalLow)}–${Math.round(estimate.totalHigh)}</Text>
+      </View>
+      <Text style={styles.costNote}>{estimate.note}</Text>
     </>
   );
 }
@@ -275,6 +304,7 @@ function PlanItem({
             {sleepSpot && <SpotSection label="SLEEP" spot={sleepSpot} />}
             {bathSpot  && <SpotSection label="BATH"  spot={bathSpot}  />}
             <ActivitySection categories={activities} />
+            {estimate && estimate.numDays > 1 && <CostSection estimate={estimate} />}
           </View>
         )}
       </TouchableOpacity>
@@ -436,6 +466,13 @@ const styles = StyleSheet.create({
   spotLabel: { fontFamily: 'Archivo-SemiBold', fontSize: 9, color: Theme.muted, letterSpacing: 1.4, marginBottom: 4 },
   spotName: { fontFamily: 'Archivo-SemiBold', fontSize: 13, color: Theme.cream, marginBottom: 3 },
   spotNotes: { fontFamily: 'Archivo', fontSize: 13, color: Theme.muted, lineHeight: 19 },
+  costRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
+  costRowLabel: { fontFamily: 'Archivo', fontSize: 12, color: Theme.muted },
+  costRowValue: { fontFamily: 'Archivo-SemiBold', fontSize: 12, color: Theme.cream },
+  costTotalRow: { borderTopWidth: 1, borderTopColor: Theme.border, marginTop: 4, paddingTop: 6 },
+  costTotalLabel: { fontFamily: 'Archivo-Bold', fontSize: 12, color: Theme.cream },
+  costTotal: { fontFamily: 'Archivo-Bold', fontSize: 13, color: Theme.gold },
+  costNote: { fontFamily: 'Archivo', fontSize: 10, color: Theme.muted, marginTop: 5, opacity: 0.7 },
   activityCategory: { marginTop: 10 },
   activityCategoryName: { fontFamily: 'Archivo-Bold', fontSize: 11, color: Theme.rust, letterSpacing: 1.1, marginBottom: 4 },
   activitySpot: { paddingLeft: 8, marginBottom: 6 },

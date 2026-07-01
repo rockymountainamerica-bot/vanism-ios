@@ -39,9 +39,9 @@ function PlanCard({ plan, replyText }: { plan: Plan; replyText: string }) {
   if (mpg && mpg > 0) {
     const gallons = plan.distance_miles / mpg;
     const base = gallons * 4.80;
-    const low  = Math.round(base * 0.95);
+    const low  = Math.round(base * 0.90);
     const high = Math.round(base * 1.10);
-    fuelLine = { text: `Est. fuel: $${low} optimistic — $${high} conservative`, muted: false };
+    fuelLine = { text: `Est. fuel: $${low}–$${high}`, muted: false };
   } else {
     fuelLine = { text: 'Set your vehicle MPG in Settings for a fuel estimate.', muted: true };
   }
@@ -62,6 +62,7 @@ function PlanCard({ plan, replyText }: { plan: Plan; replyText: string }) {
       </View>
       <Text style={cardStyles.meta}>{plan.distance_miles} mi · {formatDriveTime(plan.drive_time_minutes)}</Text>
       <Text style={fuelLine.muted ? cardStyles.fuelHint : cardStyles.fuelEstimate}>{fuelLine.text}</Text>
+      {mpg && <Text style={cardStyles.fuelHint}>Full cost estimate available after loading this plan.</Text>}
       <TouchableOpacity style={[cardStyles.btn, approved && cardStyles.btnDone]} onPress={approve} disabled={approved}>
         <Text style={cardStyles.btnText}>{approved ? '✓ Saved to Plan' : 'Approve Plan'}</Text>
       </TouchableOpacity>
