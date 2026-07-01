@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { Theme } from '@/constants/Colors';
-import { insertPlan } from '@/lib/db';
+import { getSetting, insertPlan } from '@/lib/db';
 
 const API_URL = 'https://vanism-ai.vercel.app/api/copilot';
 
@@ -33,6 +33,19 @@ function formatDriveTime(minutes: number): string {
 function PlanCard({ plan, replyText }: { plan: Plan; replyText: string }) {
   const [approved, setApproved] = useState(false);
 
+  const mpgStr = getSetting('vehicleMpg', '');
+  const mpg = mpgStr ? parseFloat(mpgStr) : null;
+  let fuelLine: { text: string; muted: boolean };
+  if (mpg && mpg > 0) {
+    const gallons = plan.distance_miles / mpg;
+    const base = gallons * 3.80;
+    const low  = Math.round(base * 0.90);
+    const high = Math.round(base * 1.10);
+    fuelLine = { text: `Est. fuel: $${low}–$${high}`, muted: false };
+  } else {
+    fuelLine = { text: 'Set your vehicle MPG in Settings for a fuel estimate.', muted: true };
+  }
+
   function approve() {
     if (approved) return;
     insertPlan(plan.origin, plan.destination, plan.distance_miles, plan.drive_time_minutes, replyText);
@@ -48,6 +61,7 @@ function PlanCard({ plan, replyText }: { plan: Plan; replyText: string }) {
         <Text style={cardStyles.location}>{plan.destination}</Text>
       </View>
       <Text style={cardStyles.meta}>{plan.distance_miles} mi · {formatDriveTime(plan.drive_time_minutes)}</Text>
+      <Text style={fuelLine.muted ? cardStyles.fuelHint : cardStyles.fuelEstimate}>{fuelLine.text}</Text>
       <TouchableOpacity style={[cardStyles.btn, approved && cardStyles.btnDone]} onPress={approve} disabled={approved}>
         <Text style={cardStyles.btnText}>{approved ? '✓ Saved to Plan' : 'Approve Plan'}</Text>
       </TouchableOpacity>
@@ -173,6 +187,8 @@ const cardStyles = StyleSheet.create({
   location: { fontFamily: 'Archivo-SemiBold', fontSize: 14, color: Theme.cream },
   arrow: { fontFamily: 'Archivo-Bold', fontSize: 14, color: Theme.rust },
   meta: { fontFamily: 'Archivo', fontSize: 12, color: Theme.muted },
+  fuelEstimate: { fontFamily: 'Archivo-SemiBold', fontSize: 12, color: Theme.gold, marginTop: 6 },
+  fuelHint: { fontFamily: 'Archivo', fontSize: 11, color: Theme.muted, marginTop: 6 },
   btn: { backgroundColor: Theme.rust, borderRadius: 8, paddingVertical: 8, alignItems: 'center', marginTop: 8 },
   btnDone: { backgroundColor: Theme.moss },
   btnText: { fontFamily: 'Archivo-Bold', fontSize: 12, color: Theme.cream, letterSpacing: 0.6 },
