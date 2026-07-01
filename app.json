@@ -39,6 +39,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "e097239a-2d9a-428a-9581-e2b3c6a01e2e"
+      }
+    },
+    "owner": "lokes.one"
   }
 }
