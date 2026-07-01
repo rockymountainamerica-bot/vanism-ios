@@ -7,6 +7,7 @@ export default function SettingsScreen() {
   const [challengeMode, setChallengeMode] = useState(
     getSetting('challengeModeEnabled', '0') === '1'
   );
+  const [tripBudget, setTripBudget]   = useState(getSetting('tripBudget', ''));
   const [vehicleName, setVehicleName] = useState(getSetting('vehicleName', ''));
   const [vehicleMpg, setVehicleMpg]   = useState(getSetting('vehicleMpg', ''));
 
@@ -31,6 +32,21 @@ export default function SettingsScreen() {
           trackColor={{ false: Theme.border, true: Theme.rust }}
           thumbColor={Theme.cream}
           ios_backgroundColor={Theme.border}
+        />
+      </View>
+
+      <Text style={[styles.section, { marginTop: 28 }]}>TRIP BUDGET</Text>
+      <View style={[styles.row, { flexDirection: 'column', alignItems: 'stretch' }]}>
+        <Text style={styles.rowLabel}>Total Trip Budget</Text>
+        <TextInput
+          style={styles.input}
+          value={tripBudget}
+          onChangeText={setTripBudget}
+          onEndEditing={() => setSetting('tripBudget', tripBudget.trim())}
+          placeholder="e.g. 500"
+          placeholderTextColor={Theme.muted}
+          keyboardType="numeric"
+          returnKeyType="done"
         />
       </View>
 
