@@ -23,6 +23,7 @@ import {
   deletePlan,
   getTripCostEstimate,
   TripCostEstimate,
+  getSetting,
 } from '@/lib/db';
 
 const API_URL = 'https://vanism-ai.vercel.app/api/copilot';
@@ -230,10 +231,19 @@ function PlanItem({
 }) {
   const date = new Date(item.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' });
 
-  const estimate   = getTripCostEstimate(item.id);
-  const costLine   = estimate && estimate.numDays > 1
-    ? `~$${Math.round(estimate.totalLow)}–$${Math.round(estimate.totalHigh)}`
-    : null;
+  const estimate = getTripCostEstimate(item.id);
+  const mpgStr   = getSetting('vehicleMpg', '');
+  const mpg      = mpgStr ? parseFloat(mpgStr) : null;
+
+  let costLine: string | null = null;
+  if (estimate && estimate.numDays > 1) {
+    // Loaded — full estimate with sleep/bath/food/buffer
+    costLine = `~$${Math.round(estimate.totalLow)}–$${Math.round(estimate.totalHigh)}`;
+  } else if (mpg && mpg > 0) {
+    // Not loaded yet — fuel-only from distance
+    const base = (item.distance_miles / mpg) * 4.80;
+    costLine = `~$${Math.round(base * 0.90)}–$${Math.round(base * 1.10)} fuel`;
+  }
 
   const sleepSpot  = expanded ? getSleepSpotForPlan(item.id)  : null;
   const bathSpot   = expanded ? getBathSpotForPlan(item.id)   : null;
