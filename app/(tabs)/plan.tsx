@@ -201,6 +201,11 @@ function PlanItem({
 }) {
   const date = new Date(item.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' });
 
+  const estimate   = getTripCostEstimate(item.id);
+  const costLine   = estimate && estimate.numDays > 1
+    ? `~$${Math.round(estimate.totalLow)}–$${Math.round(estimate.totalHigh)}`
+    : null;
+
   const sleepSpot  = expanded ? getSleepSpotForPlan(item.id)  : null;
   const bathSpot   = expanded ? getBathSpotForPlan(item.id)   : null;
   const activities = expanded ? getActivitiesForPlan(item.id) : [];
@@ -229,7 +234,10 @@ function PlanItem({
               <Text style={styles.arrow}> → </Text>
               <Text style={styles.location}>{item.destination}</Text>
             </View>
-            <Text style={styles.meta}>{item.distance_miles} mi · {formatDriveTime(item.drive_time_minutes)}</Text>
+            <View style={styles.metaRow}>
+              <Text style={styles.meta}>{item.distance_miles} mi · {formatDriveTime(item.drive_time_minutes)}</Text>
+              {costLine && <Text style={styles.costEstimate}>{costLine}</Text>}
+            </View>
           </View>
           <Text style={styles.date}>{date}</Text>
           {item.status === 'current' && (
@@ -414,7 +422,9 @@ const styles = StyleSheet.create({
   routeLine: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
   location: { fontFamily: 'Archivo-SemiBold', fontSize: 14, color: Theme.cream },
   arrow: { fontFamily: 'Archivo-Bold', fontSize: 14, color: Theme.rust },
-  meta: { fontFamily: 'Archivo', fontSize: 11, color: Theme.muted, marginTop: 2 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 },
+  meta: { fontFamily: 'Archivo', fontSize: 11, color: Theme.muted },
+  costEstimate: { fontFamily: 'Archivo-SemiBold', fontSize: 11, color: Theme.gold, opacity: 0.85 },
   date: { fontFamily: 'Archivo', fontSize: 11, color: Theme.muted, marginLeft: 12 },
   loadBtn: { backgroundColor: Theme.rust, borderRadius: 6, paddingVertical: 5, paddingHorizontal: 12, marginLeft: 10, minWidth: 52, alignItems: 'center', justifyContent: 'center' },
   loadBtnError: { backgroundColor: Theme.muted },
