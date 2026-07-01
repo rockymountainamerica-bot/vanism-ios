@@ -38,10 +38,10 @@ function PlanCard({ plan, replyText }: { plan: Plan; replyText: string }) {
   let fuelLine: { text: string; muted: boolean };
   if (mpg && mpg > 0) {
     const gallons = plan.distance_miles / mpg;
-    const base = gallons * 3.80;
-    const low  = Math.round(base * 0.90);
+    const base = gallons * 4.80;
+    const low  = Math.round(base * 0.95);
     const high = Math.round(base * 1.10);
-    fuelLine = { text: `Est. fuel: $${low}–$${high}`, muted: false };
+    fuelLine = { text: `Est. fuel: $${low} optimistic — $${high} conservative`, muted: false };
   } else {
     fuelLine = { text: 'Set your vehicle MPG in Settings for a fuel estimate.', muted: true };
   }

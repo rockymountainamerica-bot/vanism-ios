@@ -547,13 +547,17 @@ export type TripCostEstimate = {
   bath: number;
   food: number;
   parkEntry: number;
+  buffer: number;
   totalLow: number;
   totalHigh: number;
   perDay: number;
   numDays: number;
+  note: string;
 };
 
-const GAS_PRICE_PER_GALLON = 3.80; // placeholder — replace with live fuel API when available
+// $4.80/gal = honest West/mountain avg — replace with GasBuddy API when available
+const GAS_PRICE_PER_GALLON = 4.80;
+const WEEKLY_BUFFER_RATE = 100 / 7; // $100/wk van life reality buffer, applied to high estimate only
 
 function classifySleepCost(notes: string | null): number {
   const n = (notes ?? '').toLowerCase();
@@ -613,6 +617,10 @@ export function getTripCostEstimate(plan_id: number): TripCostEstimate | null {
   const parkEntry = hasParkEntry ? 35 : 0;
 
   const base = (fuel ?? 0) + sleep + bath + food + parkEntry;
+  const buffer = parseFloat((WEEKLY_BUFFER_RATE * numDays).toFixed(2));
+  const totalLow  = parseFloat((base * 0.95).toFixed(2));
+  const totalHigh = parseFloat(((base + buffer) * 1.10).toFixed(2));
+  const perDay    = parseFloat(((totalLow + totalHigh) / 2 / numDays).toFixed(2));
 
   return {
     fuel,
@@ -620,9 +628,11 @@ export function getTripCostEstimate(plan_id: number): TripCostEstimate | null {
     bath,
     food,
     parkEntry,
-    totalLow:  parseFloat((base * 0.90).toFixed(2)),
-    totalHigh: parseFloat((base * 1.10).toFixed(2)),
-    perDay:    parseFloat((base / numDays).toFixed(2)),
+    buffer,
+    totalLow,
+    totalHigh,
+    perDay,
     numDays,
+    note: `Fuel est. at $${GAS_PRICE_PER_GALLON.toFixed(2)}/gal · $100/wk buffer included`,
   };
 }
