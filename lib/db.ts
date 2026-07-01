@@ -164,6 +164,8 @@ const MIGRATIONS: string[][] = [
       (5, 'Yellowstone Arrival', 'park_entrance', 44.65841, -111.09719, 150, 'West Entrance — West Yellowstone, MT'),
       (6, 'Mount Washburn Summit', 'summit', 44.7854936, -110.4540905, 150, 'Dunraven Pass trailhead — summit of Mount Washburn')`,
   ],
+  // v10 — user-selected trip duration stored on the plan
+  [`ALTER TABLE plans ADD COLUMN num_days INTEGER NOT NULL DEFAULT 1`],
 ];
 
 export function runMigrations(): void {
@@ -234,6 +236,7 @@ export type PlanRow = {
   destination: string;
   distance_miles: number;
   drive_time_minutes: number;
+  num_days: number;
   status: 'upcoming' | 'current' | 'past';
   created_at: number;
   notes: string | null;
@@ -246,11 +249,12 @@ export function insertPlan(
   destination: string,
   distance_miles: number,
   drive_time_minutes: number,
-  notes: string
+  notes: string,
+  num_days: number
 ): void {
   getDb().runSync(
-    `INSERT INTO plans (origin, destination, distance_miles, drive_time_minutes, status, created_at, notes) VALUES (?, ?, ?, ?, 'upcoming', ?, ?)`,
-    [origin, destination, distance_miles, drive_time_minutes, Date.now(), notes]
+    `INSERT INTO plans (origin, destination, distance_miles, drive_time_minutes, status, created_at, notes, num_days) VALUES (?, ?, ?, ?, 'upcoming', ?, ?, ?)`,
+    [origin, destination, distance_miles, drive_time_minutes, Date.now(), notes, num_days]
   );
 }
 
@@ -598,7 +602,7 @@ export function getTripCostEstimate(plan_id: number): TripCostEstimate | null {
   const sleep = sleepSpots.reduce((sum, s) => sum + classifySleepCost(s.notes), 0);
   const bath  = bathSpots.reduce((sum, s) => sum + classifyBathCost(s.notes), 0);
 
-  const numDays = Math.max(sleepSpots.length + 1, 1);
+  const numDays = plan.num_days > 1 ? plan.num_days : Math.max(sleepSpots.length + 1, 1);
   const food = numDays * 25;
 
   const fuel = mpg && mpg > 0 ? (plan.distance_miles / mpg) * GAS_PRICE_PER_GALLON : null;

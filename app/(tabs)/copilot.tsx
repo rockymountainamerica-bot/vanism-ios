@@ -30,7 +30,11 @@ function formatDriveTime(minutes: number): string {
   return `${h}h ${m}min`;
 }
 
+const DAY_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 10, 14];
+
 function PlanCard({ plan, replyText }: { plan: Plan; replyText: string }) {
+  const defaultDays = Math.max(1, Math.ceil(plan.drive_time_minutes / 330));
+  const [numDays, setNumDays] = useState(defaultDays);
   const [approved, setApproved] = useState(false);
 
   const mpgStr = getSetting('vehicleMpg', '');
@@ -48,7 +52,7 @@ function PlanCard({ plan, replyText }: { plan: Plan; replyText: string }) {
 
   function approve() {
     if (approved) return;
-    insertPlan(plan.origin, plan.destination, plan.distance_miles, plan.drive_time_minutes, replyText);
+    insertPlan(plan.origin, plan.destination, plan.distance_miles, plan.drive_time_minutes, replyText, numDays);
     setApproved(true);
   }
 
@@ -61,6 +65,24 @@ function PlanCard({ plan, replyText }: { plan: Plan; replyText: string }) {
         <Text style={cardStyles.location}>{plan.destination}</Text>
       </View>
       <Text style={cardStyles.meta}>{plan.distance_miles} mi · {formatDriveTime(plan.drive_time_minutes)}</Text>
+
+      <Text style={cardStyles.dayLabel}>HOW MANY DAYS?</Text>
+      <View style={cardStyles.dayRow}>
+        {DAY_OPTIONS.map(d => (
+          <TouchableOpacity
+            key={d}
+            style={[cardStyles.dayChip, numDays === d && cardStyles.dayChipSelected]}
+            onPress={() => setNumDays(d)}
+            disabled={approved}
+            activeOpacity={0.7}
+          >
+            <Text style={[cardStyles.dayChipText, numDays === d && cardStyles.dayChipTextSelected]}>
+              {d}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
       <Text style={fuelLine.muted ? cardStyles.fuelHint : cardStyles.fuelEstimate}>{fuelLine.text}</Text>
       {mpg && <Text style={cardStyles.fuelHint}>Full cost estimate available after loading this plan.</Text>}
       <TouchableOpacity style={[cardStyles.btn, approved && cardStyles.btnDone]} onPress={approve} disabled={approved}>
@@ -188,9 +210,17 @@ const cardStyles = StyleSheet.create({
   location: { fontFamily: 'Archivo-SemiBold', fontSize: 14, color: Theme.cream },
   arrow: { fontFamily: 'Archivo-Bold', fontSize: 14, color: Theme.rust },
   meta: { fontFamily: 'Archivo', fontSize: 12, color: Theme.muted },
+  // Day selector
+  dayLabel: { fontFamily: 'Archivo-SemiBold', fontSize: 9, color: Theme.muted, letterSpacing: 1.4, marginTop: 10, marginBottom: 6 },
+  dayRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  dayChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, borderWidth: 1, borderColor: Theme.border, backgroundColor: Theme.charcoal },
+  dayChipSelected: { backgroundColor: Theme.rust, borderColor: Theme.rust },
+  dayChipText: { fontFamily: 'Archivo-SemiBold', fontSize: 13, color: Theme.muted },
+  dayChipTextSelected: { color: Theme.cream },
+  // Fuel
   fuelEstimate: { fontFamily: 'Archivo-SemiBold', fontSize: 12, color: Theme.gold, marginTop: 6 },
-  fuelHint: { fontFamily: 'Archivo', fontSize: 11, color: Theme.muted, marginTop: 6 },
-  btn: { backgroundColor: Theme.rust, borderRadius: 8, paddingVertical: 8, alignItems: 'center', marginTop: 8 },
+  fuelHint: { fontFamily: 'Archivo', fontSize: 11, color: Theme.muted, marginTop: 2 },
+  btn: { backgroundColor: Theme.rust, borderRadius: 8, paddingVertical: 8, alignItems: 'center', marginTop: 10 },
   btnDone: { backgroundColor: Theme.moss },
   btnText: { fontFamily: 'Archivo-Bold', fontSize: 12, color: Theme.cream, letterSpacing: 0.6 },
 });
