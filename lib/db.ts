@@ -537,3 +537,92 @@ export function setSetting(key: string, value: string): void {
     [key, value]
   );
 }
+
+// ---------------------------------------------------------------------------
+// Trip cost estimate
+// ---------------------------------------------------------------------------
+export type TripCostEstimate = {
+  fuel: number | null;
+  sleep: number;
+  bath: number;
+  food: number;
+  parkEntry: number;
+  totalLow: number;
+  totalHigh: number;
+  perDay: number;
+  numDays: number;
+};
+
+const GAS_PRICE_PER_GALLON = 3.80; // placeholder — replace with live fuel API when available
+
+function classifySleepCost(notes: string | null): number {
+  const n = (notes ?? '').toLowerCase();
+  if (/dispersed|blm|free/.test(n)) return 0;
+  if (/campground|state park|forest/.test(n)) return 30;
+  if (/rv park|hookup|resort/.test(n)) return 50;
+  return 25;
+}
+
+function classifyBathCost(notes: string | null): number {
+  const n = (notes ?? '').toLowerCase();
+  if (/free|natural|hot spring/.test(n) && !/fee/.test(n)) return 0;
+  if (/facility|public|pool|shower/.test(n)) return 8;
+  return 5;
+}
+
+export function getTripCostEstimate(plan_id: number): TripCostEstimate | null {
+  const db = getDb();
+
+  const plan = db.getFirstSync<PlanRow>(`SELECT * FROM plans WHERE id = ?`, [plan_id]);
+  if (!plan) return null;
+
+  const sleepSpots = db.getAllSync<PlanSleepSpotRow>(
+    `SELECT id, plan_id, name, lat, lon, notes, day_number FROM plan_sleep_spots WHERE plan_id = ? ORDER BY day_number`,
+    [plan_id]
+  );
+  const bathSpots = db.getAllSync<PlanBathSpotRow>(
+    `SELECT id, plan_id, name, lat, lon, notes, day_number FROM plan_bath_spots WHERE plan_id = ? ORDER BY day_number`,
+    [plan_id]
+  );
+  const achievementNames = db.getAllSync<{ name: string }>(
+    `SELECT DISTINCT name FROM achievements`
+  ).map(r => r.name);
+
+  const mpgStr = getSetting('vehicleMpg', '');
+  const mpg = mpgStr ? parseFloat(mpgStr) : null;
+
+  const sleep = sleepSpots.reduce((sum, s) => sum + classifySleepCost(s.notes), 0);
+  const bath  = bathSpots.reduce((sum, s) => sum + classifyBathCost(s.notes), 0);
+
+  const numDays = Math.max(sleepSpots.length + 1, 1);
+  const food = numDays * 25;
+
+  const fuel = mpg && mpg > 0 ? (plan.distance_miles / mpg) * GAS_PRICE_PER_GALLON : null;
+
+  // Park entry: scan all text in the plan for national park / landmark references
+  const corpus = [
+    plan.notes ?? '',
+    plan.origin,
+    plan.destination,
+    ...sleepSpots.flatMap(s => [s.name, s.notes ?? '']),
+    ...bathSpots.flatMap(s => [s.name, s.notes ?? '']),
+  ].join(' ').toLowerCase();
+
+  const parkTriggers = ['national park', 'yellowstone', ...achievementNames];
+  const hasParkEntry = parkTriggers.some(t => corpus.includes(t.toLowerCase()));
+  const parkEntry = hasParkEntry ? 35 : 0;
+
+  const base = (fuel ?? 0) + sleep + bath + food + parkEntry;
+
+  return {
+    fuel,
+    sleep,
+    bath,
+    food,
+    parkEntry,
+    totalLow:  parseFloat((base * 0.90).toFixed(2)),
+    totalHigh: parseFloat((base * 1.10).toFixed(2)),
+    perDay:    parseFloat((base / numDays).toFixed(2)),
+    numDays,
+  };
+}

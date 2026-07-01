@@ -21,6 +21,7 @@ import {
   getBathSpotForPlan,
   getActivitiesForPlan,
   deletePlan,
+  getTripCostEstimate,
 } from '@/lib/db';
 
 const API_URL = 'https://vanism-ai.vercel.app/api/copilot';
