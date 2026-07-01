@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { StyleSheet, Switch, Text, View } from 'react-native';
+import { StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { Theme } from '@/constants/Colors';
 import { getSetting, setSetting } from '@/lib/db';
 
@@ -7,6 +7,8 @@ export default function SettingsScreen() {
   const [challengeMode, setChallengeMode] = useState(
     getSetting('challengeModeEnabled', '0') === '1'
   );
+  const [vehicleName, setVehicleName] = useState(getSetting('vehicleName', ''));
+  const [vehicleMpg, setVehicleMpg]   = useState(getSetting('vehicleMpg', ''));
 
   function toggleChallengeMode(val: boolean) {
     setSetting('challengeModeEnabled', val ? '1' : '0');
@@ -31,6 +33,35 @@ export default function SettingsScreen() {
           ios_backgroundColor={Theme.border}
         />
       </View>
+
+      <Text style={[styles.section, { marginTop: 28 }]}>MY VEHICLE</Text>
+      <View style={[styles.row, { flexDirection: 'column', alignItems: 'stretch', gap: 14 }]}>
+        <View>
+          <Text style={styles.rowLabel}>Vehicle Name</Text>
+          <TextInput
+            style={styles.input}
+            value={vehicleName}
+            onChangeText={setVehicleName}
+            onEndEditing={() => setSetting('vehicleName', vehicleName.trim())}
+            placeholder="e.g. 2019 Ford Transit 250"
+            placeholderTextColor={Theme.muted}
+            returnKeyType="done"
+          />
+        </View>
+        <View>
+          <Text style={styles.rowLabel}>Estimated MPG</Text>
+          <TextInput
+            style={styles.input}
+            value={vehicleMpg}
+            onChangeText={setVehicleMpg}
+            onEndEditing={() => setSetting('vehicleMpg', vehicleMpg.trim())}
+            placeholder="e.g. 16"
+            placeholderTextColor={Theme.muted}
+            keyboardType="numeric"
+            returnKeyType="done"
+          />
+        </View>
+      </View>
     </View>
   );
 }
@@ -40,6 +71,7 @@ const styles = StyleSheet.create({
   section: { fontFamily: 'Archivo-SemiBold', fontSize: 10, color: Theme.muted, letterSpacing: 1.5, marginBottom: 12 },
   row: { flexDirection: 'row', alignItems: 'center', backgroundColor: Theme.surface, borderWidth: 1, borderColor: Theme.border, borderRadius: 12, padding: 16 },
   rowText: { flex: 1, marginRight: 16 },
-  rowLabel: { fontFamily: 'Archivo-SemiBold', fontSize: 14, color: Theme.cream, marginBottom: 4 },
+  rowLabel: { fontFamily: 'Archivo-SemiBold', fontSize: 14, color: Theme.cream, marginBottom: 6 },
   rowDesc: { fontFamily: 'Archivo', fontSize: 12, color: Theme.muted, lineHeight: 18 },
+  input: { fontFamily: 'Archivo', fontSize: 14, color: Theme.cream, borderWidth: 1, borderColor: Theme.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: Theme.charcoal },
 });
