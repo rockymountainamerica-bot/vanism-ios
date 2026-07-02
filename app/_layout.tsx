@@ -14,6 +14,10 @@ export const unstable_settings = {
   initialRouteName: '(tabs)',
 };
 
+// Run synchronously at module evaluation time — before any component renders
+// or useState initializer fires. Fixes "no such table: settings" on fresh install.
+runMigrations();
+
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
@@ -29,7 +33,6 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (loaded) {
-      runMigrations();
       SplashScreen.hideAsync();
     }
   }, [loaded]);
